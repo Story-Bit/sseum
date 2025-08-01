@@ -1,27 +1,47 @@
 'use client';
 
-import React from 'react';
-import { useBlog } from '@/components/BlogContext';
-import Stage1_StrategyDraft from '@/components/stages/Stage1_StrategyDraft';
+import Sidebar from '@/components/Sidebar';
+// Editor 대신, 실제 존재하는 Stage2_Refinement를 가져옵니다.
 import Stage2_Refinement from '@/components/stages/Stage2_Refinement';
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+import { useBlogStore } from '@/components/stages/blog-store';
+import { useEffect } from 'react';
+import { useAuth } from '@/components/AuthContext';
+import { getPostsFromFirestore } from '@/firebase/post';
+import { toast } from 'sonner';
 
 export default function EditorPage() {
-  const { currentStage, activePost } = useBlog();
+    const { user } = useAuth();
+    const { loadPosts, setLoading } = useBlogStore();
+  
+    useEffect(() => {
+      if (user) {
+        const fetchPosts = async () => {
+          setLoading(true, "데이터를 불러오는 중입니다...");
+          try {
+            const posts = await getPostsFromFirestore(user.uid);
+            loadPosts(posts);
+          } catch (error) {
+            console.error("Failed to fetch posts:", error);
+            toast.error("데이터를 불러오는 데 실패했습니다.");
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchPosts();
+      }
+    }, [user, loadPosts, setLoading]);
 
-  // 현재 작업 단계에 따라 적절한 '방'을 보여줍니다.
-  // 만약 선택된 글이 없다면, 항상 '전략실'을 보여줍니다.
-  if (!activePost) {
-    return <Stage1_StrategyDraft />;
-  }
-
-  switch (currentStage) {
-    case 'strategy':
-      return <Stage1_StrategyDraft />;
-    case 'refinement':
-      return <Stage2_Refinement />;
-    case 'publish':
-      return <div>발행실 (제작 예정)</div>;
-    default:
-      return <div>알 수 없는 단계입니다.</div>;
-  }
+  return (
+    <ResizablePanelGroup direction="horizontal" className="w-full h-full rounded-lg border">
+      <ResizablePanel defaultSize={20} minSize={15}>
+        <Sidebar />
+      </ResizablePanel>
+      <ResizableHandle withHandle />
+      <ResizablePanel defaultSize={80}>
+        {/* Editor 대신 Stage2_Refinement를 사용합니다. */}
+        <Stage2_Refinement />
+      </ResizablePanel>
+    </ResizablePanelGroup>
+  );
 }

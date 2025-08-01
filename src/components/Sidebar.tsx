@@ -1,124 +1,61 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래 코드로 교체하십시오.
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { FilePlus, Save, UploadCloud, Search, Brain, Share2, Wand2, Loader, ChevronDown, Trash2 } from 'lucide-react';
-import { useBlog, type Stage, type BlogData } from './BlogContext';
-import { useAuth } from './AuthContext';
-import { collection, query, getDocs, orderBy } from 'firebase/firestore';
-import { db } from '@/firebase/config';
-import { cn } from '@/lib/utils';
+import { useBlogStore, PostType } from '@/stores/blog-store'; // PostType을 함께 불러옵니다.
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { toast } from 'sonner';
 
-interface SidebarProps { isSidebarOpen: boolean; }
+// 이제 이 컴포넌트는 어떠한 props도 받지 않습니다.
+export default function Sidebar() {
+  const { posts, activePost, setActivePost } = useBlogStore();
 
-const Sidebar: React.FC<SidebarProps> = ({ isSidebarOpen }) => {
-  const { 
-    posts, setPosts,
-    activePost, setActivePost,
-    currentStage, setCurrentStage,
-    resetWorkspace,
-    handleSavePost,
-    setIsAboutModalOpen, setIsStyleModalOpen, setIsPasteModalOpen,
-    deletePost
-  } = useBlog();
-  
-  const { userId, appId, showToast } = useAuth();
-  const [isPostListOpen, setIsPostListOpen] = useState(true);
-
-  useEffect(() => {
-    if (userId && appId) {
-      const fetchPosts = async () => {
-        try {
-          const postsCollectionRef = collection(db, 'artifacts', appId, 'users', userId, 'posts');
-          const q = query(postsCollectionRef, orderBy('updatedAt', 'desc'));
-          const querySnapshot = await getDocs(q);
-          const fetchedPosts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as BlogData[];
-          setPosts(fetchedPosts);
-        } catch (error) {
-          showToast("저장된 글을 불러오는 데 실패했습니다.", "error");
-        }
-      };
-      fetchPosts();
-    }
-  }, [userId, appId, setPosts, showToast]);
-
-  const handleStageClick = (stageId: Stage) => {
-    if (!activePost && stageId !== 'strategy') {
-      showToast("먼저 글을 선택하거나 새로 작성해주세요.", "error");
-      return;
-    }
-    setCurrentStage(stageId);
+  const handleNewPost = () => {
+    setActivePost({
+      id: `temp-${Date.now()}`,
+      title: "새 포스트",
+      draft: "<p>여기에 내용을 입력하세요.</p>",
+    });
+    toast.info("새 포스트 초안이 생성되었습니다.");
   };
-  
+
+  // 'post' 매개변수가 'PostType'임을 명확히 알려줍니다.
+  const handleSelectPost = (post: PostType) => {
+    setActivePost(post);
+    toast.success(`'${post.title}' 글을 불러왔습니다.`);
+  };
+
   return (
-    <aside className={`fixed top-0 left-0 h-full bg-gray-900 text-white flex flex-col z-30 transition-transform duration-300 ease-in-out ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-      <div className="w-72 h-full flex flex-col">
-        <div className="flex items-center justify-center h-16 border-b border-gray-700/50 flex-shrink-0 px-4">
-          <button onClick={() => setIsAboutModalOpen(true)}><h1 className="text-2xl font-bold">씀.</h1></button>
-        </div>
-        
-        <div className="p-4 border-b border-gray-700/50">
-          <div className="grid grid-cols-2 gap-2">
-            <ActionButton onClick={resetWorkspace} icon={<FilePlus size={20} />} text="새 글 작성" />
-            <ActionButton onClick={() => setIsPasteModalOpen(true)} icon={<UploadCloud size={20} />} text="외부 글 가져오기" />
-          </div>
-        </div>
-
-        <div className="flex-1 flex flex-col min-h-0">
-          <div className="p-4">
-            <nav className="space-y-1">
-              <p className="px-2 text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">작업 단계</p>
-              <button onClick={() => { setActivePost(null); setCurrentStage('strategy'); }} className={`flex items-center w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${!activePost ? 'bg-blue-600' : 'hover:bg-gray-700'}`}><Search className='w-5 h-5 mr-3' /> 전략 & 초고</button>
-              <button disabled={!activePost} onClick={() => handleStageClick('refinement')} className={`flex items-center w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${currentStage === 'refinement' && activePost ? 'bg-blue-600' : 'hover:bg-gray-700'} disabled:opacity-50`}><Brain className='w-5 h-5 mr-3' /> AI 퇴고</button>
-              <button disabled={!activePost} onClick={() => handleStageClick('publish')} className={`flex items-center w-full px-3 py-2 text-sm font-medium rounded-md transition-colors ${currentStage === 'publish' && activePost ? 'bg-blue-600' : 'hover:bg-gray-700'} disabled:opacity-50`}><Share2 className='w-5 h-5 mr-3' /> 발행 & 활용</button>
-            </nav>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto px-4 border-t border-gray-700/50">
-            <button onClick={() => setIsPostListOpen(!isPostListOpen)} className="w-full flex justify-between items-center py-4">
-              <p className="text-sm font-semibold text-gray-300">저장된 글</p>
-              <ChevronDown className={`w-5 h-5 text-gray-400 transition-transform ${isPostListOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {isPostListOpen && (
-              <div className="space-y-1 pb-4 animate-fade-in">
-                {posts.map((post) => (
-                  <div key={post.id} className="group flex items-center justify-between rounded-md hover:bg-gray-700/50">
-                    <button
-                      onClick={() => { setActivePost(post); setCurrentStage('refinement'); }}
-                      className={cn('flex-1 block p-3 text-left transition-colors rounded-l-md min-w-0', activePost?.id === post.id ? 'bg-gray-700' : '')}
-                    >
-                      <h3 className="font-semibold text-sm truncate">{post.title || '제목 없음'}</h3>
-                    </button>
-                    <button 
-                      onClick={() => deletePost(post.id)} 
-                      className="p-3 text-gray-500 hover:text-red-400 transition-colors rounded-r-md"
-                      title="삭제"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
-                ))}
-                {posts.length === 0 && (<div className="px-2 py-5 text-center text-gray-500 text-sm">저장된 글이 없습니다.</div>)}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <div className="p-4 border-t border-gray-700/50">
-          <ActionButton onClick={handleSavePost} icon={<Save size={20} />} text="현재 글 저장" />
-          <div className="mt-4">
-            <button onClick={() => setIsStyleModalOpen(true)} className="w-full flex items-center justify-center p-3 rounded-md text-sm font-medium text-gray-300 hover:bg-gray-700"><Wand2 size={16} className="mr-3 text-blue-400"/> 나만의 글쓰기 스타일</button>
-          </div>
-        </div>
+    <div className="flex flex-col h-full bg-gray-100 dark:bg-gray-950 border-r">
+      <div className="p-4 border-b">
+        <Button className="w-full" onClick={handleNewPost}>
+          새 글 작성
+        </Button>
       </div>
-    </aside>
+      <ScrollArea className="flex-1 p-4">
+        <h2 className="text-lg font-semibold mb-2">저장된 글</h2>
+        <div className="space-y-2">
+          {posts.length > 0 ? (
+            // 'post' 매개변수가 'PostType'임을 명확히 알려줍니다.
+            posts.map((post: PostType) => (
+              <div
+                key={post.id}
+                onClick={() => handleSelectPost(post)}
+                className={`p-2 rounded-md cursor-pointer border ${
+                  activePost?.id === post.id
+                    ? 'bg-blue-100 dark:bg-blue-900 border-blue-500'
+                    : 'hover:bg-gray-200 dark:hover:bg-gray-800'
+                }`}
+              >
+                <p className="font-medium truncate">{post.title}</p>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500 text-center py-4">저장된 글이 없습니다.</p>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
   );
-};
-
-const ActionButton: React.FC<{ onClick: () => void; icon: React.ReactNode; text: string }> = ({ onClick, icon, text }) => (
-  <button onClick={onClick} className="w-full flex items-center justify-center p-3 text-center rounded-lg bg-gray-700 hover:bg-gray-600 transition-colors">
-    {icon}
-    <span className="text-sm font-semibold ml-2">{text}</span>
-  </button>
-);
-
-export default Sidebar;
+}

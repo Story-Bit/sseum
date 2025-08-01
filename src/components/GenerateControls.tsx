@@ -1,37 +1,35 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래 코드로 교체하십시오.
+
 'use client';
 
-import { useBlog } from '@/components/BlogContext';
-import { useAuth } from '@/components/AuthContext';
+import { useBlogStore } from './stages/blog-store'; // 새로운 심장 useBlogStore
 import { Button } from './ui/button';
 import { Loader } from 'lucide-react';
-import { useState } from 'react';
+import { toast } from 'sonner'; // 알림 기능은 sonner를 직접 사용합니다.
 
-// GenerationType을 여기서 직접 정의하거나, gemini.ts에서 가져올 수 있습니다.
-// 지금은 직접 정의하여 독립성을 높입니다.
 type GenerationType = 'GENERATE_DRAFT' | 'REVISE_MYTHICAL' | 'SUGGEST_KEYWORDS';
 
 const GenerateControls = () => {
-  const { activePost, updateActivePost } = useBlog();
-  const { showToast } = useAuth();
-  const [isLoading, setIsLoading] = useState(false);
+  // BlogContext와 AuthContext 대신, useBlogStore에서 모든 것을 가져옵니다.
+  const { activePost, setActivePost, setLoading, isLoading, loadingMessage } = useBlogStore();
 
   const handleGeneration = async (type: GenerationType) => {
     if (!activePost) {
-      showToast("먼저 포스트를 선택하거나 생성해야 합니다.", "error");
+      toast.error("먼저 포스트를 선택하거나 생성해야 합니다.");
       return;
     }
 
     const textForApi = type === 'SUGGEST_KEYWORDS' ? activePost.title : activePost.draft;
 
     if (!textForApi) {
-      showToast("요청에 필요한 제목 또는 내용이 없습니다.", "error");
+      toast.error("요청에 필요한 제목 또는 내용이 없습니다.");
       return;
     }
 
-    setIsLoading(true);
-    showToast("신탁을 받는 중...", "info");
+    setLoading(true, "신탁을 받는 중입니다...");
     
     try {
+      // API 호출 로직은 그대로 유지합니다.
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -44,22 +42,25 @@ const GenerateControls = () => {
         throw new Error(data.error || '신탁을 받는 데 실패했습니다.');
       }
       
+      let updatedPost;
       if (type === 'SUGGEST_KEYWORDS') {
         const keywordArray = data.result.split(',').map((k: string) => k.trim());
-        // 키워드를 저장하는 로직이 필요하다면 updateActivePost를 확장해야 합니다.
-        // 지금은 임시로 draft에 추가하겠습니다.
-        updateActivePost({ draft: `${activePost.draft}\n\n추천 키워드: ${data.result}` });
+        updatedPost = { 
+          ...activePost, 
+          strategyResult: { ...activePost.strategyResult, keywords: keywordArray }
+        };
       } else {
-        updateActivePost({ draft: data.result });
+        updatedPost = { ...activePost, draft: data.result };
       }
       
-      showToast('신탁을 성공적으로 받았습니다!', 'success');
+      setActivePost(updatedPost); // setActivePost로 상태를 업데이트합니다.
+      toast.success('신탁을 성공적으로 받았습니다!');
 
     } catch (error: any) {
       console.error(error);
-      showToast(error.message, 'error');
+      toast.error(error.message);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -74,6 +75,7 @@ const GenerateControls = () => {
       <Button onClick={() => handleGeneration('SUGGEST_KEYWORDS')} disabled={!activePost || isLoading}>
         키워드 추천
       </Button>
+      {/* isLoading 상태를 useBlogStore에서 직접 가져옵니다. */}
       {isLoading && <Loader className="animate-spin text-blue-500" />}
     </div>
   );

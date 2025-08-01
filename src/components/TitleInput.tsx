@@ -1,30 +1,26 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래 코드로 교체하십시오.
+
 'use client';
 
-import { useBlog } from '@/components/BlogContext';
-import { Input } from '@/components/ui/input';
+// 경로 약어('@') 대신, 파일의 실제 위치를 기준으로 한 상대 경로를 사용합니다.
+import { useBlogStore } from '@/stores/blog-store'; 
+import { Input } from './ui/input';
 
-const TitleInput = () => {
-  // 새로운 useBlog 훅에서 필요한 데이터와 함수를 가져옵니다.
-  const { activePost, updateActivePost } = useBlog();
+export default function TitleInput() {
+  const { activePost, setActivePost } = useBlogStore();
 
-  if (!activePost) {
-    // 활성화된 포스트가 없으면 제목 입력란을 보여주지 않습니다.
-    return (
-        <span className="text-lg font-semibold text-muted-foreground">
-            포스트를 선택하세요
-        </span>
-    );
-  }
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!activePost) return;
+    setActivePost({ ...activePost, title: e.target.value });
+  };
 
   return (
     <Input
-      value={activePost.title}
-      // updateActivePost 함수를 사용하여 제목(title)을 업데이트합니다.
-      onChange={(e) => updateActivePost({ title: e.target.value })}
-      placeholder="포스트 제목을 입력하세요..."
-      className="border-none bg-transparent text-lg font-bold shadow-none focus-visible:ring-0"
+      type="text"
+      placeholder="매력적인 제목을 입력하세요..."
+      value={activePost?.title || ''}
+      onChange={handleTitleChange}
+      className="text-2xl md:text-3xl font-bold border-none focus-visible:ring-0 shadow-none pl-0"
     />
   );
-};
-
-export default TitleInput;
+}

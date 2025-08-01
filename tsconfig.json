@@ -1,5 +1,6 @@
 {
   "compilerOptions": {
+    "target": "es5",
     "lib": [
       "dom",
       "dom.iterable",
@@ -8,13 +9,14 @@
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
+    "forceConsistentCasingInFileNames": true,
     "noEmit": true,
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "jsx": "preserve", // [수정] "preserve"에서 "react-jsx"로 변경
+    "jsx": "preserve",
     "incremental": true,
     "plugins": [
       {
@@ -23,11 +25,13 @@
     ],
     "baseUrl": ".",
     "paths": {
+      // 이 부분에 당신의 특별한 경로를 추가하여,
+      // @/stores/ 라는 약어가 실제로는 'src/components/stages'를 가리킨다고 명시합니다.
+      "@/stores/*": ["./src/components/stages/*"],
       "@/*": [
-        "src/*"
+        "./src/*"
       ]
-    },
-    "target": "ES2017"
+    }
   },
   "include": [
     "next-env.d.ts",

@@ -1,59 +1,46 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래 코드로 교체하십시오.
+
 'use client';
 
 import React from 'react';
-import { Menu } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { useAuth } from '@/components/AuthContext';
-import { signOut } from 'firebase/auth';
+import { useAuth } from './AuthContext';
+// 1. 당신의 실제 설계도인 'firebase/config'에서 auth를 가져옵니다.
+import { auth } from '../firebase/config';
+import { signOut as firebaseSignOut } from 'firebase/auth';
+import { Button } from './ui/button';
+import { LogOut } from 'lucide-react';
+// 2. 당신의 설계도에 있는 './stages/modal-store' 경로를 사용합니다.
+import { useModalStore } from './stages/modal-store';
+import { toast } from 'sonner';
 
-interface HeaderProps {
-  isSidebarOpen: boolean;
-  setIsSidebarOpen: (isOpen: boolean) => void;
-}
+export default function Header() {
+  const { user } = useAuth();
+  const { openModal } = useModalStore();
 
-const Header: React.FC<HeaderProps> = ({ isSidebarOpen, setIsSidebarOpen }) => {
-  const router = useRouter();
-  const { user, auth, showToast } = useAuth();
-
-  const handleLogout = async () => {
-    if (!auth) return;
+  const handleSignOut = async () => {
     try {
-      await signOut(auth);
-      showToast('로그아웃 되었습니다.', 'info');
-      // MainLayout이 상태 변화를 감지하여 자동으로 HomePage를 보여줄 것입니다.
+      await firebaseSignOut(auth);
+      toast.success("성공적으로 로그아웃되었습니다.");
+      window.location.href = '/login';
     } catch (error) {
-      showToast('로그아웃 중 오류가 발생했습니다.', 'error');
+      console.error("Sign out error", error);
+      toast.error("로그아웃 중 오류가 발생했습니다.");
     }
   };
 
   return (
-    <header className="bg-white border-b border-gray-200 sticky top-0 z-20 flex-shrink-0">
-      <div className="flex items-center justify-between h-16 px-6">
-        {/* 이 버튼은 사이드바가 있을 때만 의미가 있으므로, user가 있을 때만 렌더링합니다. */}
-        {user && (
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-md text-gray-500 hover:bg-gray-100">
-            <Menu />
-          </button>
-        )}
-        
-        {/* 오른쪽 영역 */}
-        <div className="flex-1 flex justify-end">
-          {user ? (
-            <div className="flex items-center gap-4">
-              <span className="text-sm font-medium text-gray-700">{user.email}</span>
-              <button onClick={handleLogout} className="bg-gray-200 text-gray-700 font-semibold py-2 px-4 rounded-lg hover:bg-gray-300 transition-colors text-sm">
-                로그아웃
-              </button>
-            </div>
-          ) : (
-             <button onClick={() => router.push('/login')} className="bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-              로그인
-            </button>
-          )}
-        </div>
+    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b">
+      <div>
+        <Button variant="outline" onClick={() => openModal('loadPost')}>
+          글 불러오기
+        </Button>
+      </div>
+      <div className="flex items-center gap-4">
+        {user && <span className="text-sm font-medium">{user.email}</span>}
+        <Button variant="ghost" size="icon" onClick={handleSignOut}>
+          <LogOut className="h-5 w-5" />
+        </Button>
       </div>
     </header>
   );
-};
-
-export default Header;
+}

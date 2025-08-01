@@ -1,60 +1,45 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래의 완벽한 코드로 교체하십시오.
+
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/components/AuthContext';
+import React from 'react';
+import { useAuth } from '../AuthContext';
 import { db } from '@/firebase/config';
-import { collection, query, getDocs, orderBy, doc, deleteDoc } from 'firebase/firestore';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { Loader, X, Trash2 } from 'lucide-react';
-import { type BlogData } from '@/components/BlogContext';
+// 1. 새로운 심장 useBlogStore와 PostType을 가져옵니다.
+import { useBlogStore, PostType } from '../stages/blog-store';
+import { toast } from 'sonner';
 
 interface LoadPostModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onLoadPost: (post: BlogData) => void;
+  // onLoadPost는 이제 setActivePost로 대체되므로, 직접적인 prop은 필요 없어졌습니다.
 }
 
-const LoadPostModal: React.FC<LoadPostModalProps> = ({ isOpen, onClose, onLoadPost }) => {
-  const { userId, appId, showToast } = useAuth();
-  const [posts, setPosts] = useState<BlogData[]>([]);
-  const [isFetching, setIsFetching] = useState(false);
+const LoadPostModal: React.FC<LoadPostModalProps> = ({ isOpen, onClose }) => {
+  const { user } = useAuth();
+  // 2. 중앙 기록 보관소에서 필요한 모든 것을 가져옵니다.
+  const { posts, setActivePost, removePostFromList, isLoading } = useBlogStore();
 
-  // 모달이 열릴 때마다 Firestore에서 글 목록을 직접 불러옵니다.
-  useEffect(() => {
-    if (isOpen && userId && appId) {
-      const fetchPosts = async () => {
-        setIsFetching(true);
-        try {
-          const collectionPath = `artifacts/${appId}/users/${userId}/posts`;
-          const q = query(collection(db, collectionPath), orderBy('updatedAt', 'desc'));
-          const querySnapshot = await getDocs(q);
-          const fetchedPosts = querySnapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data()
-          })) as BlogData[];
-          setPosts(fetchedPosts);
-        } catch (error) {
-          console.error("게시물 가져오기 오류: ", error);
-          showToast("글 목록을 불러오는 데 실패했습니다.", "error");
-        } finally {
-          setIsFetching(false);
-        }
-      };
-      fetchPosts();
-    }
-  }, [isOpen, userId, appId, showToast]); // showToast를 의존성 배열에 추가
+  const handleLoadPost = (post: PostType) => {
+    setActivePost(post); // 글을 선택하면 중앙 저장소의 activePost를 설정합니다.
+    toast.success(`'${post.title}' 글을 불러왔습니다.`);
+    onClose(); // 모달을 닫습니다.
+  };
 
   const handleDelete = async (postId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!userId || !appId) return;
+    if (!user) return;
     if (window.confirm("정말로 이 글을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.")) {
       try {
-        const docRef = doc(db, `artifacts/${appId}/users/${userId}/posts`, postId);
+        const docRef = doc(db, `users/${user.uid}/posts`, postId);
         await deleteDoc(docRef);
-        setPosts(prevPosts => prevPosts.filter(p => p.id !== postId));
-        showToast("글이 성공적으로 삭제되었습니다.", "success");
+        removePostFromList(postId); // 중앙 저장소에서도 해당 글을 제거합니다.
+        toast.success("글이 성공적으로 삭제되었습니다.");
       } catch (error) {
         console.error("글 삭제 오류:", error);
-        showToast("글을 삭제하는 중 오류가 발생했습니다.", "error");
+        toast.error("글을 삭제하는 중 오류가 발생했습니다.");
       }
     }
   };
@@ -69,16 +54,17 @@ const LoadPostModal: React.FC<LoadPostModalProps> = ({ isOpen, onClose, onLoadPo
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-1"><X /></button>
         </div>
         <div className="p-6 max-h-[60vh] overflow-y-auto">
-          {isFetching ? (
+          {/* 3. 더 이상 자체 로딩이 아닌, 중앙 로딩 상태를 확인합니다. */}
+          {isLoading ? (
             <div className="flex justify-center items-center h-40"><Loader className="animate-spin text-blue-500" /></div>
           ) : posts.length > 0 ? (
             <ul className="space-y-2">
               {posts.map(post => (
                 <li key={post.id} className="flex items-center gap-2">
-                  <button onClick={() => onLoadPost(post)} className="flex-1 text-left p-3 rounded-lg border bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-all">
+                  <button onClick={() => handleLoadPost(post)} className="flex-1 text-left p-3 rounded-lg border bg-gray-50 hover:bg-blue-50 hover:border-blue-300 transition-all">
                     <p className="font-semibold text-gray-800">{post.title || '제목 없음'}</p>
                     <p className="text-xs text-gray-500 mt-1">
-                      {(post as any).updatedAt?.toDate ? new Date((post as any).updatedAt.toDate()).toLocaleString() : '날짜 정보 없음'}
+                      {post.updatedAt?.toDate ? new Date(post.updatedAt.toDate()).toLocaleString() : '날짜 정보 없음'}
                     </p>
                   </button>
                   <button onClick={(e) => handleDelete(post.id, e)} className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-full transition-colors">

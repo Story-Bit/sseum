@@ -1,26 +1,38 @@
+// 이 파일의 기존 내용을 모두 삭제하고 아래의 완벽한 코드로 교체하십시오.
+
 'use client';
 
-import { useBlog } from '@/components/BlogContext';
+import { useBlogStore } from '@/stores/blog-store';
 import { Input } from '@/components/ui/input';
 
 const MainKeywordInput = () => {
-  // 새로운 useBlog 훅에서 필요한 데이터와 함수를 가져옵니다.
-  const { activePost, updateActivePost } = useBlog();
+  const { activePost, setActivePost } = useBlogStore();
 
-  if (!activePost) {
-    // 활성화된 포스트가 없으면 아무것도 보여주지 않습니다.
-    return null;
-  }
+  const handleKeywordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // activePost가 null일 가능성은 아래 return 문에서 이미 방지되지만,
+    // 만약을 위해 방어 코드를 유지합니다.
+    if (!activePost) return;
+    
+    setActivePost({ 
+      ...activePost, 
+      strategyResult: {
+        ...(activePost.strategyResult || {}), 
+        mainKeyword: e.target.value
+      } 
+    });
+  };
 
-  return (
+  // activePost가 존재할 때만 Input 컴포넌트를 렌더링하고,
+  // 그렇지 않으면 아무것도 렌더링하지 않습니다(null).
+  // 이것이 가장 안전하고 현대적인 React의 방식입니다.
+  return activePost ? (
     <Input
-      value={activePost.mainKeyword || ''}
-      // updateActivePost 함수를 사용하여 핵심 키워드(mainKeyword)를 업데이트합니다.
-      onChange={(e) => updateActivePost({ mainKeyword: e.target.value })}
+      value={activePost.strategyResult?.mainKeyword || ''}
+      onChange={handleKeywordChange}
       placeholder="핵심 키워드를 입력하세요..."
       className="border-gray-300"
     />
-  );
+  ) : null;
 };
 
 export default MainKeywordInput;

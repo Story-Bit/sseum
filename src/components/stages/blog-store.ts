@@ -1,8 +1,7 @@
-// 이 파일의 기존 내용을 모두 삭제하고 아래의 강화된 코드로 교체하십시오.
-
 import { create } from 'zustand';
 import { Timestamp } from 'firebase/firestore';
 
+// PostType 앞에 'export'를 추가하여 외부에서 사용할 수 있도록 허가합니다.
 export interface PostType {
   id: string;
   title: string;
@@ -12,21 +11,29 @@ export interface PostType {
   strategyResult?: Record<string, any>;
 }
 
+export interface StrategyResult {
+  type: 'new_idea' | 'competitor';
+  data: any;
+}
+
+// Stage 타입을 외부에서 쓸 수 있도록 export 합니다.
+export type Stage = 'strategy' | 'refinement' | 'publish';
+
 interface BlogState {
   posts: PostType[];
   activePost: PostType | null;
   isLoading: boolean;
   loadingMessage: string;
-  // [추가] 전략 분석 결과를 저장할 새로운 공간
-  strategyResult: { type: 'new_idea' | 'competitor', data: any } | null;
+  strategyResult: StrategyResult | null;
+  currentStage: Stage;
 
   setLoading: (isLoading: boolean, message?: string) => void;
   loadPosts: (posts: PostType[]) => void;
   setActivePost: (post: PostType | null) => void;
   upsertPostInList: (postToUpsert: PostType) => void;
   removePostFromList: (postIdToDelete: string) => void;
-  // [추가] 전략 분석 결과를 설정할 새로운 함수
-  setStrategyResult: (result: { type: 'new_idea' | 'competitor', data: any } | null) => void;
+  setStrategyResult: (result: StrategyResult | null) => void;
+  setCurrentStage: (stage: Stage) => void;
 }
 
 export const useBlogStore = create<BlogState>((set) => ({
@@ -34,8 +41,8 @@ export const useBlogStore = create<BlogState>((set) => ({
   activePost: null,
   isLoading: false,
   loadingMessage: '작업을 처리 중입니다...',
-  // [추가] strategyResult 초기 상태
   strategyResult: null,
+  currentStage: 'strategy',
 
   setLoading: (isLoading, message = '작업을 처리 중입니다...') =>
     set({ isLoading, loadingMessage: message }),
@@ -57,6 +64,6 @@ export const useBlogStore = create<BlogState>((set) => ({
     set((state) => ({
       posts: state.posts.filter((p) => p.id !== postIdToDelete),
     })),
-  // [추가] setStrategyResult 함수 구현
   setStrategyResult: (result) => set({ strategyResult: result }),
+  setCurrentStage: (stage) => set({ currentStage: stage }),
 }));

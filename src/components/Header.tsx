@@ -1,19 +1,21 @@
-// 이 파일의 기존 내용을 모두 삭제하고 아래 코드로 교체하십시오.
-
 'use client';
 
 import React from 'react';
 import { useAuth } from './AuthContext';
-// 1. 당신의 실제 설계도인 'firebase/config'에서 auth를 가져옵니다.
-import { auth } from '../firebase/config';
+import { auth } from '@/firebase/config';
 import { signOut as firebaseSignOut } from 'firebase/auth';
 import { Button } from './ui/button';
-import { LogOut } from 'lucide-react';
-// 2. 당신의 설계도에 있는 './stages/modal-store' 경로를 사용합니다.
+import { LogOut, Menu } from 'lucide-react'; // Menu 아이콘 추가
 import { useModalStore } from './stages/modal-store';
 import { toast } from 'sonner';
 
-export default function Header() {
+// isSidebarOpen과 setIsSidebarOpen을 props로 받도록 수정합니다.
+interface HeaderProps {
+  isSidebarOpen: boolean;
+  setIsSidebarOpen: (isOpen: boolean) => void;
+}
+
+export default function Header({ isSidebarOpen, setIsSidebarOpen }: HeaderProps) {
   const { user } = useAuth();
   const { openModal } = useModalStore();
 
@@ -29,12 +31,12 @@ export default function Header() {
   };
 
   return (
-    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b">
-      <div>
-        <Button variant="outline" onClick={() => openModal('loadPost')}>
-          글 불러오기
-        </Button>
-      </div>
+    <header className="flex items-center justify-between p-4 bg-white dark:bg-gray-900 border-b h-16">
+      {/* 삼선(메뉴) 버튼 추가 */}
+      <Button variant="ghost" size="icon" onClick={() => setIsSidebarOpen(!isSidebarOpen)}>
+        <Menu />
+      </Button>
+      
       <div className="flex items-center gap-4">
         {user && <span className="text-sm font-medium">{user.email}</span>}
         <Button variant="ghost" size="icon" onClick={handleSignOut}>

@@ -1,7 +1,8 @@
+'use client';
+
 import { create } from 'zustand';
 import { Timestamp } from 'firebase/firestore';
 
-// PostType 앞에 'export'를 추가하여 외부에서 사용할 수 있도록 허가합니다.
 export interface PostType {
   id: string;
   title: string;
@@ -16,7 +17,6 @@ export interface StrategyResult {
   data: any;
 }
 
-// Stage 타입을 외부에서 쓸 수 있도록 export 합니다.
 export type Stage = 'strategy' | 'refinement' | 'publish';
 
 interface BlogState {
@@ -31,6 +31,7 @@ interface BlogState {
   loadPosts: (posts: PostType[]) => void;
   setActivePost: (post: PostType | null) => void;
   upsertPostInList: (postToUpsert: PostType) => void;
+  // 여기에 삭제 기능의 설계도를 추가합니다.
   removePostFromList: (postIdToDelete: string) => void;
   setStrategyResult: (result: StrategyResult | null) => void;
   setCurrentStage: (stage: Stage) => void;
@@ -51,15 +52,15 @@ export const useBlogStore = create<BlogState>((set) => ({
   upsertPostInList: (postToUpsert) =>
     set((state) => {
       const index = state.posts.findIndex((p) => p.id === postToUpsert.id);
-      let newPosts: PostType[];
+      let newPosts = [...state.posts];
       if (index !== -1) {
-        newPosts = [...state.posts];
         newPosts[index] = postToUpsert;
       } else {
         newPosts = [postToUpsert, ...state.posts];
       }
       return { posts: newPosts };
     }),
+  // 여기에 삭제 기능의 실제 구현을 추가합니다.
   removePostFromList: (postIdToDelete) =>
     set((state) => ({
       posts: state.posts.filter((p) => p.id !== postIdToDelete),

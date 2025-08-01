@@ -1,10 +1,7 @@
-// 이 파일의 기존 내용을 모두 삭제하고 아래의 완벽한 코드로 교체하십시오.
-
 'use client';
 
 import React, { ReactNode, useState, useCallback } from 'react';
 import { Sparkles, Target, Loader, ArrowLeft } from 'lucide-react';
-// StrategyResult 타입을 함께 가져옵니다.
 import { useBlogStore, StrategyResult } from './blog-store';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -13,6 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import NewIdeaResults from './NewIdeaResults';
 import CompetitorResults from './CompetitorResults';
 import BlogTypeSelector from './BlogTypeSelector';
+import { callGenerativeAPI } from '@/lib/gemini';
 
 const StrategyCard: React.FC<{ icon: ReactNode; title: string; description: string; onClick: () => void }> = ({ icon, title, description, onClick }) => (
     <div onClick={onClick} className="p-8 text-center bg-white rounded-2xl border border-gray-200 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-500/10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2">
@@ -31,22 +29,29 @@ const Stage1_StrategyDraft = () => {
     const [competitorContent, setCompetitorContent] = useState('');
 
     const handleAnalysis = useCallback(async () => {
-        if (!strategyType) return; // strategyType이 null이면 실행하지 않습니다.
-
+        if (!strategyType) return;
+        
         setLoading(true, 'AI가 분석을 시작합니다...');
-        setStrategyResult(null);
         try {
-            await new Promise(resolve => setTimeout(resolve, 1500)); 
+            let prompt: string;
+            let schema: object;
             
-            // 'result' 변수의 타입을 StrategyResult로 명확히 지정합니다.
-            const result: StrategyResult = {
-                type: strategyType,
-                data: strategyType === 'new_idea' 
-                    ? { /* Mock Data */ } 
-                    : { /* Mock Data */ }
-            };
+            if (strategyType === 'new_idea') {
+                if (!topic || !blogType) { throw new Error("블로그 유형과 대주제를 모두 선택해주세요."); }
+                setLoading(true, 'AI가 시장 조사를 시작합니다...');
+                prompt = `<role>당신은 대한민국 최고의 네이버 트렌드 분석가이자, 15년차 SEO 콘텐츠 전략 전문가입니다.</role><task>사용자가 입력한 대주제인 '[주제: ${topic}]'와 블로그 유형 '[유형: ${blogType}]'에 대해, 다음 4단계의 연쇄적 사고 과정을 거쳐 최종 결과물을 지정된 JSON 형식으로만 응답해야 합니다.</task><process_instruction>1. **KOS 분석**: 유망 키워드 5개 분석 ('score'는 1~5 정수). 2. **주제 클러스터 설계**: 발굴된 키워드 기반 클러스터 3개 생성. 3. **필러 콘텐츠 제안**: 클러스터를 종합하여 필러 콘텐츠 아이디어 1개 제안. 4. **타겟 독자 및 추천 글감**: 클러스터 기반 페르소나 3개 정의 (각 'name', 'pain_point', 'motivation', 'writing_tactic', 'recommended_titles' 4개 포함).</process_instruction>`;
+                schema = { type: "OBJECT", properties: { kos_scores: { type: "ARRAY", items: { type: "OBJECT", properties: { keyword: { type: "STRING" }, score: { type: "NUMBER" }, search_volume: { type: "STRING" }, content_saturation: { type: "STRING" }, ad_competition: { type: "STRING" } } } }, clusters: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, keywords: { type: "ARRAY", items: { type: "STRING" } } } } }, pillar_content: { type: "OBJECT", properties: { title: { type: "STRING" }, description: { type: "STRING" } } }, personas: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, pain_point: { type: "STRING" }, motivation: { type: "STRING" }, writing_tactic: { type: "STRING" }, recommended_titles: { type: "ARRAY", items: { type: "STRING" } } } } } }, required: ["kos_scores", "clusters", "pillar_content", "personas"] };
+            } else { // competitor
+                if (!competitorContent) { throw new Error("경쟁사 블로그 본문을 입력해주세요."); }
+                setLoading(true, 'AI가 경쟁사의 약점을 분석하고 있습니다...');
+                prompt = `<role>당신은 최고의 네이버 블로그 SEO 전략가이자, 날카로운 콘텐츠 비평가입니다.</role><task>아래 [경쟁사 블로그 본문]을 면밀히 분석하여, 이 글을 압도할 수 있는 '이기는 콘텐츠' 전략을 다음 2단계 사고 과정에 따라 제안해주십시오. 결과는 반드시 지정된 JSON 형식으로만 응답해야 합니다.</task><process_instruction>1.  **1단계: 콘텐츠 갭 분석**: 경쟁사 글의 강점과 약점을 분석하여, 우리가 공략해야 할 '콘텐츠 갭(차별화 포인트)' 3가지를 찾아냅니다. (결과 키: content_gap)\n2.  **2단계: 전략적 재구성**: 위에서 분석한 '콘텐츠 갭'을 완벽하게 해결하는 것을 목표로, 더 나은 '전략적 목차(new_outline)'와 독자의 클릭을 유도하는 '추천 제목(titles)' 3개를 생성합니다.</process_instruction>\n---\n[경쟁사 블로그 본문]:\n${competitorContent}`;
+                schema = { type: "OBJECT", properties: { content_gap: { type: "ARRAY", items: { type: "STRING" } }, new_outline: { type: "STRING" }, titles: { type: "ARRAY", items: { type: "STRING" } } }, required: ["content_gap", "new_outline", "titles"] };
+            }
+
+            const apiResult = await callGenerativeAPI(prompt, schema);
+            const result: StrategyResult = { type: strategyType, data: apiResult };
             
-            setStrategyResult(result); // 이제 오류 없이 전달됩니다.
+            setStrategyResult(result);
             toast.success("전략 분석이 완료되었습니다.");
         } catch (e: any) {
             toast.error(`전략 분석 중 오류: ${e.message}`);

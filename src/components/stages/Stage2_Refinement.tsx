@@ -1,11 +1,15 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { useBlogStore, PostType } from './blog-store';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Search, Award, Mic, Loader, Undo, Redo, Clipboard, ClipboardCheck } from 'lucide-react';
+import { Search, Award, Mic, Loader } from 'lucide-react';
 import SeoPanel from './panels/SeoPanel';
+import CriticPanel from './panels/CriticPanel';
+import ExpertPanel from './panels/ExpertPanel';
+import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 const PanelTab: React.FC<{ isActive: boolean; onClick: () => void; icon: React.ReactNode; label: string; }> = ({ isActive, onClick, icon, label }) => (
     <button onClick={onClick} className={`flex-1 p-3 text-sm font-bold flex items-center justify-center gap-2 transition-colors ${ isActive ? 'text-blue-600 bg-blue-50 border-b-2 border-blue-600' : 'text-gray-500 hover:bg-gray-100'}`}>
@@ -21,7 +25,8 @@ const Stage2_Refinement = () => {
         if (!activePost) return;
         const updatedPost = { ...activePost, ...data };
         setActivePost(updatedPost);
-        upsertPostInList(updatedPost); // 변경사항을 목록에도 즉시 반영
+        // 실시간 동기화를 위해 목록도 업데이트합니다.
+        upsertPostInList(updatedPost);
     };
 
     if (isLoading) {
@@ -35,7 +40,7 @@ const Stage2_Refinement = () => {
     if (!activePost) {
         return (
             <div className="flex h-full items-center justify-center">
-                <p className="text-gray-500">퇴고할 포스트가 선택되지 않았습니다.</p>
+                <p className="text-gray-500">퇴고할 포스트가 선택되지 않았습니다. 사이드바에서 글을 선택해주세요.</p>
             </div>
         );
     }
@@ -48,7 +53,6 @@ const Stage2_Refinement = () => {
                 </div>
                 <Textarea value={activePost.draft || ''} onChange={e => handleUpdate({ draft: e.target.value })} className="w-full flex-grow p-5 resize-none focus:outline-none leading-relaxed text-gray-800 border-none shadow-none focus-visible:ring-0" placeholder="초고를 작성하세요." />
                 <div className="p-3 border-t bg-gray-50 rounded-b-xl flex justify-between items-center">
-                    <div>{/* Undo/Redo can be implemented by managing history in the store */}</div>
                     <p className="text-xs text-gray-500">글자 수: {(activePost.draft || '').length.toLocaleString()}자</p>
                 </div>
             </div>
@@ -61,8 +65,8 @@ const Stage2_Refinement = () => {
                 </div>
                 <div className="flex-grow overflow-y-auto">
                     {activePanel === 'seo' && <SeoPanel />}
-                    {activePanel === 'critic' && <div className="p-4">AI 평론가 기능 (제작 예정)</div>}
-                    {activePanel === 'expert' && <div className="p-4">편집장 요청 기능 (제작 예정)</div>}
+                    {activePanel === 'critic' && <CriticPanel />}
+                    {activePanel === 'expert' && <ExpertPanel />}
                 </div>
             </div>
         </div>

@@ -4,9 +4,32 @@ import Stage1_StrategyDraft from '@/components/stages/Stage1_StrategyDraft';
 import Stage2_Refinement from '@/components/stages/Stage2_Refinement';
 import Stage3_Publish from '@/components/stages/Stage3_Publish';
 import { useBlogStore } from '@/components/stages/blog-store';
+import { useEffect } from 'react';
+import { useAuth } from '@/components/AuthContext';
+import { getPostsFromFirestore } from '@/firebase/post';
+import { toast } from 'sonner';
 
 export default function EditorPage() {
-    const { currentStage } = useBlogStore();
+    const { user } = useAuth();
+    const { loadPosts, setLoading, currentStage } = useBlogStore();
+  
+    useEffect(() => {
+      if (user) {
+        const fetchPosts = async () => {
+          setLoading(true, "데이터를 불러오는 중입니다...");
+          try {
+            const posts = await getPostsFromFirestore(user.uid);
+            loadPosts(posts);
+          } catch (error) {
+            console.error("Failed to fetch posts:", error);
+            toast.error("데이터를 불러오는 데 실패했습니다.");
+          } finally {
+            setLoading(false);
+          }
+        };
+        fetchPosts();
+      }
+    }, [user, loadPosts, setLoading]);
 
     const renderCurrentStage = () => {
         switch (currentStage) {
@@ -21,9 +44,8 @@ export default function EditorPage() {
         }
     }
 
-    // 이 페이지는 이제 오직 현재 작업 단계의 내용만 보여줍니다.
     return (
-        <div className="p-4 sm:p-6 lg:p-8 h-full">
+        <div className="h-full">
             {renderCurrentStage()}
         </div>
     );

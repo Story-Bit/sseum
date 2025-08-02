@@ -1,17 +1,15 @@
-// 이 파일의 기존 내용을 모두 삭제하고 아래의 완벽한 코드로 교체하십시오.
-
 'use client';
 
+// 1. { useState }를 괄호로 감싸 올바르게 가져옵니다.
 import React, { useState } from 'react';
 import { ArrowRight, Loader, Target, Award, CheckCircle } from 'lucide-react';
 import { useBlogStore, PostType } from './blog-store';
 import { useAuth } from '../AuthContext';
 import { toast } from 'sonner';
-// import { callGenerativeAPI } from '@/lib/gemini'; // 실제 API 호출 함수
+import { callGenerativeAPI } from '@/lib/gemini';
 import { db } from '@/firebase/config';
 import { collection, addDoc, updateDoc, doc, serverTimestamp } from 'firebase/firestore';
 
-// --- 데이터베이스와 직접 소통하는 제련된 함수 ---
 const savePost = async (userId: string, postData: Partial<PostType>): Promise<PostType> => {
   const postsCollectionRef = collection(db, `users/${userId}/posts`);
   if (postData.id && !postData.id.startsWith('temp-')) {
@@ -27,12 +25,17 @@ const savePost = async (userId: string, postData: Partial<PostType>): Promise<Po
   }
 };
 
+// 2. result의 타입을 명확하게 정의하여 'any' 오류를 해결합니다.
 interface CompetitorResultsProps {
-  result: any;
+  result: {
+    content_gap: string[];
+    new_outline: string;
+    titles: string[];
+  };
 }
 
 const CompetitorResults: React.FC<CompetitorResultsProps> = ({ result }) => {
-  const { setActivePost, upsertPostInList, setLoading } = useBlogStore();
+  const { setActivePost, upsertPostInList, setLoading, setCurrentStage } = useBlogStore();
   const { user } = useAuth();
   const [isGeneratingTitle, setIsGeneratingTitle] = useState<string | null>(null);
 
@@ -49,7 +52,6 @@ const CompetitorResults: React.FC<CompetitorResultsProps> = ({ result }) => {
       const tempPost: Partial<PostType> = { title, strategyResult: { mainKeyword: title, outline } };
       const savedInitialPost = await savePost(user.uid, tempPost);
 
-      // --- [복원된 신탁 주문] ---
       const draftPrompt = `
 <role>당신은 경쟁사의 글을 분석하여 그보다 뛰어난 글을 작성하는 최고의 블로그 작가입니다.</role>
 <task>아래 <콘텐츠 지침>을 완벽히 준수하여, 경쟁사를 압도하는 고품질 블로그 포스트 초고를 한국어로 작성해주십시오.</task>
@@ -66,10 +68,8 @@ const CompetitorResults: React.FC<CompetitorResultsProps> = ({ result }) => {
 ---
 [최종 초고 출력]:`;
       
-      // const fullText = await callGenerativeAPI(draftPrompt);
-      const fullText = `제목: ${title}\n\n[복원된 프롬프트에 따라 AI가 생성한 초고 내용입니다.]`;
-      // --- [주문 복원 완료] ---
-
+      const fullText = await callGenerativeAPI(draftPrompt);
+      
       const titleMatch = fullText.match(/^(제목|Title):\s*(.*)/im);
       const newTitle = titleMatch ? titleMatch[2] : title;
       const postContent = titleMatch ? fullText.substring(fullText.indexOf('\n') + 1).trim() : fullText;
@@ -83,8 +83,8 @@ const CompetitorResults: React.FC<CompetitorResultsProps> = ({ result }) => {
 
       upsertPostInList(updatedPost);
       setActivePost(updatedPost);
-
-      toast.success("경쟁사를 뛰어넘는 초고 생성이 완료되었습니다!");
+      setCurrentStage('refinement');
+      toast.success("경쟁사를 뛰어넘는 초고 생성 완료! 퇴고실로 이동합니다.");
 
     } catch (e: any) {
       toast.error(`초고 생성 중 오류: ${e.message}`);

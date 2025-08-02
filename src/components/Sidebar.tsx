@@ -27,16 +27,11 @@ const StyleAnalyzer = () => {
         try {
             const storedStyle = localStorage.getItem('userStyleGuide');
             if (storedStyle) setSavedStyle(storedStyle);
-        } catch (e) {
-            console.error("localStorage 접근 오류:", e);
-        }
+        } catch (e) { console.error("localStorage 접근 오류:", e); }
     }, []);
 
     const handleAnalyzeStyle = async () => {
-        if (!userStyleText.trim()) {
-            toast.error('분석할 텍스트를 입력해주세요.');
-            return;
-        }
+        if (!userStyleText.trim()) { toast.error('분석할 텍스트를 입력해주세요.'); return; }
         setIsAnalyzing(true);
         toast.info("AI가 당신의 스타일을 분석하고 있습니다...");
         
@@ -50,9 +45,7 @@ const StyleAnalyzer = () => {
                 setSavedStyle(result.style_guide);
                 setUserStyleText('');
                 toast.success('나만의 스타일 분석 및 저장이 완료되었습니다!');
-            } else {
-                throw new Error("API 응답에서 스타일 가이드를 찾을 수 없습니다.");
-            }
+            } else { throw new Error("API 응답에서 스타일 가이드를 찾을 수 없습니다."); }
         } catch (e: any) {
             toast.error(`스타일 분석 중 오류가 발생했습니다: ${e.message}`);
         } finally {
@@ -78,21 +71,12 @@ const StyleAnalyzer = () => {
                         <div>
                             <p className="text-xs text-green-400 mb-2 font-semibold">✅ 스타일이 저장되어 자동으로 적용됩니다.</p>
                             <p className="text-xs text-gray-300 bg-gray-700 p-2 rounded-md mb-2">"{savedStyle.substring(0, 100)}..."</p>
-                            <Button onClick={handleClearStyle} variant="destructive" size="sm" className="w-full text-xs">
-                                <Trash2 className="mr-2 h-3 w-3" /> 저장된 스타일 초기화
-                            </Button>
+                            <Button onClick={handleClearStyle} variant="destructive" size="sm" className="w-full text-xs"><Trash2 className="mr-2 h-3 w-3" /> 저장된 스타일 초기화</Button>
                         </div>
                     ) : (
                         <>
                             <p className="text-xs text-gray-400 mb-2">대표적인 글 1개를 붙여넣으면, AI가 스타일을 분석하여 초고에 반영합니다.</p>
-                            <Textarea 
-                                value={userStyleText} 
-                                onChange={(e) => setUserStyleText(e.target.value)} 
-                                rows={4} 
-                                className="w-full p-2 border border-gray-600 bg-gray-800 text-gray-200 rounded-md text-xs focus:ring-2 focus:ring-blue-500" 
-                                placeholder="여기에 대표적인 블로그 글 1개의 전체 본문을 붙여넣으세요..." 
-                                disabled={isAnalyzing} 
-                            />
+                            <Textarea value={userStyleText} onChange={(e) => setUserStyleText(e.target.value)} rows={4} className="w-full p-2 border border-gray-600 bg-gray-800 text-gray-200 rounded-md text-xs" placeholder="여기에 대표적인 블로그 글 1개의 전체 본문을 붙여넣으세요..." disabled={isAnalyzing} />
                             <div className="flex gap-2 mt-2">
                                 <Button onClick={handleAnalyzeStyle} disabled={isAnalyzing || !userStyleText} className="flex-1 text-xs" size="sm">
                                     {isAnalyzing ? <Loader className="animate-spin mr-2 h-4 w-4" /> : '스타일 분석 및 저장'}
@@ -112,7 +96,7 @@ interface SidebarProps {
 
 export default function Sidebar({ isSidebarOpen }: SidebarProps) {
   const { user } = useAuth();
-  const { activePost, setActivePost, upsertPostInList, currentStage, setCurrentStage } = useBlogStore();
+  const { posts, activePost, setActivePost, upsertPostInList, currentStage, setCurrentStage } = useBlogStore();
   const { openModal } = useModalStore();
 
   const handleNewPost = () => {
@@ -122,20 +106,21 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
   };
 
   const handleSave = async () => {
-    if (!user || !activePost) {
-      toast.error(!user ? "저장을 위해 로그인이 필요합니다." : "저장할 글이 없습니다.");
-      return;
-    }
+    if (!user || !activePost) { toast.error(!user ? "저장을 위해 로그인이 필요합니다." : "저장할 글이 없습니다."); return; }
     try {
       const savedPost = await savePostToFirestore(user.uid, activePost);
       upsertPostInList(savedPost);
       setActivePost(savedPost);
       toast.success("글이 성공적으로 저장되었습니다.");
-    } catch (error) {
-      toast.error("저장 중 오류가 발생했습니다.");
-    }
+    } catch (error) { toast.error("저장 중 오류가 발생했습니다."); }
   };
   
+  const handleSelectPost = (post: PostType) => {
+    setActivePost(post);
+    setCurrentStage('refinement');
+    toast.success(`'${post.title}' 글을 불러왔습니다.`);
+  };
+
   const stages: { id: Stage; name: string; icon: ReactElement }[] = [
     { id: 'strategy', name: '1. 전략 & 초고', icon: <Search/> },
     { id: 'refinement', name: '2. AI 퇴고', icon: <Brain/> },

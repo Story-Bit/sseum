@@ -1,100 +1,88 @@
+// /src/app/api/gemini/route.ts
+
 import { NextRequest, NextResponse } from 'next/server';
-import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold, SafetySetting } from '@google/generative-ai';
+import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from '@google/generative-ai';
 
-const API_KEY = process.env.GEMINI_API_KEY;
-if (!API_KEY) { throw new Error("GEMINI_API_KEY가 .env.local 파일에 설정되지 않았습니다."); }
+// 신탁소(API) 초기화
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
-const genAI = new GoogleGenerativeAI(API_KEY);
-const safetySettings: SafetySetting[] = [
+const safetySettings = [
   { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
   { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
 ];
 
-const refineTextToJson = async (rawText: string, schema: any, retries = 3): Promise<any> => {
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
-    const prompt = `<role>데이터 처리기</role><task>[원문 텍스트]를 분석하여, [JSON 스키마]에 맞춰 완벽한 JSON 객체로 변환하라.</task><rules>- 최종 결과는 오직 순수한 JSON 객체여야 한다.</rules>\n---\n[원문 텍스트]:\n${rawText}\n---\n[JSON 스키마]:\n${JSON.stringify(schema)}`;
-    
-    for (let i = 0; i < retries; i++) {
-        try {
-            const result = await model.generateContent({
-                contents: [{ role: "user", parts: [{ text: prompt }] }],
-                generationConfig: { responseMimeType: "application/json", responseSchema: schema, temperature: 0.1 }
-            });
-            return JSON.parse(result.response.text());
-        } catch (error: any) {
-            console.warn(`[제련소] ${i + 1}차 시도 실패. 남은 시도: ${retries - 1 - i}`);
-            if (i === retries - 1) {
-                console.error("[제련소] 최종 제련 실패:", error);
-                throw new Error("AI가 보낸 응답이 반복적으로 손상되어 복원할 수 없습니다.");
-            }
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
-    }
-    throw new Error("AI 응답 제련에 최종적으로 실패했습니다.");
+const parseJsonFromText = (text: string): any | null => {
+  const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+  const match = text.match(jsonRegex);
+  const jsonString = match ? match[1] : text;
+  try {
+    return JSON.parse(jsonString);
+  } catch (error) {
+    console.error("JSON 파싱 실패:", error);
+    return null;
+  }
 };
 
-const divineSieve = (rawText: string, keyword: string): string[] => {
-    const regex = new RegExp(`(?=${keyword}\\s*\\d*[:.])`, "g");
-    const parts = rawText.split(regex).filter(p => p.trim().length > 0);
-    return parts;
+const createStrategyPrompt = (mainKeyword: string, blogType: string): string => {
+  const systemPrompt = `
+    당신은 15년차 SEO 전략 전문가이자 콘텐츠 마케팅의 대가입니다.
+    당신의 임무는 주어진 주제에 대해 SEO 잠재력을 분석하고, 완벽한 콘텐츠 전략을 수립하는 것입니다.
+    결과는 반드시, 오직, 무조건 아래의 JSON 형식으로만 응답해야 합니다. 다른 부가 설명이나 서론, 결론을 절대 추가하지 마십시오.
+
+    {
+      "kosResults": [{ "keyword": "string", "kosScore": "number", "explanation": "string" }],
+      "pillarContent": "string",
+      "topicClusters": [{ "mainTopic": "string", "subTopics": ["string"] }],
+      "personas": [{ "name": "string", "description": "string", "recommendedPosts": [{ "title": "string", "tactic": "string" }] }]
+    }
+  `;
+  const userPrompt = `
+    - 주제: ${mainKeyword}
+    - 블로그 유형: ${blogType}
+    - 위 정보를 바탕으로 SEO 전략을 분석하고, 시스템 프롬프트에 명시된 JSON 형식으로 결과를 반환하시오.
+  `;
+  return `${systemPrompt}\n\n---\n\n${userPrompt}`;
 };
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, schema } = await req.json();
-    if (!prompt) return NextResponse.json({ error: '프롬프트가 누락되었습니다.' }, { status: 400 });
+    // [수정] 더 이상 task를 받지 않고, 필요한 데이터를 직접 받는다.
+    const { mainKeyword, blogType } = await req.json();
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest", safetySettings });
-    
-    console.log("1단계: 외부 신에게 텍스트 원석 채굴을 요청합니다...");
-    const initialResult = await model.generateContent(prompt);
-    const rawText = initialResult.response.text();
-    console.log("원석 채굴 완료.");
+    if (!mainKeyword || !blogType) {
+      return NextResponse.json({ error: '필수 데이터(mainKeyword, blogType)가 누락되었습니다.' }, { status: 400 });
+    }
 
-    if (!schema) return NextResponse.json({ result: rawText });
-    
-    if (schema.type === "OBJECT" && schema.properties) {
-        console.log("미세 제련술 가동: 복잡한 배열 구조 감지.");
-        const finalResult: { [key: string]: any } = {};
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro-latest", safetySettings });
+    const prompt = createStrategyPrompt(mainKeyword, blogType);
 
-        for (const key in schema.properties) {
-            const prop = schema.properties[key];
-            if (prop.type === "ARRAY" && prop.items?.type === "OBJECT") {
-                console.log(`2단계: '${key}' 항목에 대한 신성한 체 가동...`);
-                const sieveKeyword = key === 'personas' ? '페르소나' : '키워드'; 
-                const textAtoms = divineSieve(rawText, sieveKeyword);
+    const result = await model.generateContent({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: {
+            temperature: 0.7,
+            topK: 1,
+            topP: 1,
+            maxOutputTokens: 8192,
+            responseMimeType: "application/json",
+        },
+    });
 
-                if(textAtoms.length === 0) {
-                    console.warn(`신성한 체가 '${key}'에 대한 원석 조각을 찾지 못했습니다. 원본 텍스트로 단일 제련을 시도합니다.`);
-                    const refinedItems = await refineTextToJson(rawText, schema);
-                    return NextResponse.json({ result: refinedItems });
-                }
+    const responseText = result.response.text();
+    const strategyResult = parseJsonFromText(responseText);
 
-                console.log(`3단계: ${textAtoms.length}개의 원석 조각을 개별 제련합니다.`);
-                const refinedItems = [];
-                for (const atom of textAtoms) {
-                    const refinedItem = await refineTextToJson(atom, prop.items);
-                    refinedItems.push(refinedItem);
-                }
-                
-                finalResult[key] = refinedItems;
-                console.log(`'${key}' 항목 제련 완료.`);
-            } else {
-                 const singleItemSchema = {type: "OBJECT", properties: {[key]: prop}};
-                 const refinedItem = await refineTextToJson(rawText, singleItemSchema);
-                 finalResult[key] = refinedItem[key];
-            }
-        }
-        return NextResponse.json({ result: finalResult });
+    if (!strategyResult) {
+      throw new Error('API로부터 유효한 전략 데이터(JSON)를 수신하지 못했습니다.');
     }
     
-    const finalResult = await refineTextToJson(rawText, schema);
-    return NextResponse.json({ result: finalResult });
+    return NextResponse.json(strategyResult);
 
   } catch (error: any) {
-    console.error("Gemini API Route Error:", error);
-    return NextResponse.json({ error: error.message || '내부 서버 오류' }, { status: 500 });
+    console.error(`신탁소(API) 오류 발생:`, error);
+    return NextResponse.json(
+      { error: error.message || '신탁소(API)에서 알 수 없는 오류가 발생했습니다.' },
+      { status: 500 }
+    );
   }
 }

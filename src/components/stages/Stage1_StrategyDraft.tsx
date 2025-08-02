@@ -1,137 +1,225 @@
+// /src/components/stages/Stage1_StrategyDraft.tsx
+
 'use client';
 
-import React, { ReactNode, useState, useCallback } from 'react';
-import { Sparkles, Target, Loader, ArrowLeft } from 'lucide-react';
-import { useBlogStore, StrategyResult } from './blog-store';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
+import { useState } from 'react';
+import { create } from 'zustand';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import NewIdeaResults from './NewIdeaResults';
-import CompetitorResults from './CompetitorResults';
-import BlogTypeSelector from './BlogTypeSelector';
-import { callGenerativeAPI, callChunkedAPI } from '@/lib/gemini';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Loader2, Rocket, Lightbulb, Library, Users, ArrowLeft, Wand2 } from 'lucide-react';
+import { toast } from "sonner";
 
-const StrategyCard: React.FC<{ icon: ReactNode; title: string; description: string; onClick: () => void }> = ({ icon, title, description, onClick }) => (
-    <div onClick={onClick} className="p-8 text-center bg-white rounded-2xl border border-gray-200 hover:border-blue-500 hover:shadow-2xl hover:shadow-blue-500/10 cursor-pointer transition-all duration-300 transform hover:-translate-y-2">
-        <div className="text-5xl mb-4 text-blue-500 inline-block bg-blue-100 p-4 rounded-full">{icon}</div>
-        <h3 className="text-xl font-bold text-gray-800">{title}</h3>
-        <p className="text-sm text-gray-500 mt-2">{description}</p>
-    </div>
+// =================================================================================
+// 1. 타입 정의
+// =================================================================================
+export interface KOSResult {
+  keyword: string;
+  kosScore: number;
+  explanation: string;
+}
+
+export interface TopicCluster {
+  mainTopic: string;
+  subTopics: string[];
+}
+
+export interface RecommendedPost {
+  title: string;
+  tactic: string;
+}
+
+export interface Persona {
+  name: string;
+  description: string;
+  recommendedPosts: RecommendedPost[];
+}
+
+export interface StrategyResult {
+  kosResults: KOSResult[];
+  pillarContent: string;
+  topicClusters: TopicCluster[];
+  personas: Persona[];
+}
+
+// =================================================================================
+// 2. 중앙 상태 관리소 (Zustand)
+// =================================================================================
+interface StrategyState {
+  strategyResult: StrategyResult | null;
+  isLoading: boolean;
+  error: string | null;
+  setStrategyResult: (result: StrategyResult | null) => void;
+  setIsLoading: (loading: boolean) => void;
+  setError: (error: string | null) => void;
+  resetStrategy: () => void;
+}
+
+const useStrategyStore = create<StrategyState>((set) => ({
+  strategyResult: null,
+  isLoading: false,
+  error: null,
+  setStrategyResult: (result) => set({ strategyResult: result, isLoading: false, error: null }),
+  setIsLoading: (loading) => set({ isLoading: loading }),
+  setError: (error) => set({ error: error, isLoading: false }),
+  resetStrategy: () => set({ strategyResult: null, isLoading: false, error: null }),
+}));
+
+
+// =================================================================================
+// 3. UI 컴포넌트
+// =================================================================================
+
+// 3.1. 결과물을 표시하는 하위 컴포넌트
+const ResultDisplay = ({ strategyResult, onReset }: { strategyResult: StrategyResult; onReset: () => void; }) => (
+  <div className="w-full max-w-4xl mx-auto animate-fade-in space-y-8">
+    <Button variant="ghost" onClick={onReset} className="mb-2">
+      <ArrowLeft className="mr-2 h-4 w-4" />
+      다시 분석하기
+    </Button>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center text-xl"><Rocket className="mr-3 h-6 w-6 text-red-500" />AI 키워드 기회 점수 (KOS)</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {strategyResult.kosResults.map((item) => (
+          <Card key={item.keyword} className="p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex justify-between items-start">
+                <h3 className="font-bold text-lg">{item.keyword}</h3>
+                <Badge variant={item.kosScore > 80 ? 'default' : 'secondary'}>{item.kosScore}점</Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">{item.explanation}</p>
+            </div>
+          </Card>
+        ))}
+      </CardContent>
+    </Card>
+
+    <Card className="bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800">
+      <CardHeader>
+        <CardTitle className="flex items-center text-xl"><Lightbulb className="mr-3 h-6 w-6 text-green-500" />AI 추천 필러 콘텐츠 전략</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className="mb-4">{strategyResult.pillarContent}</p>
+        <Button className="bg-green-500 hover:bg-green-600">이 전략으로 초고 생성</Button>
+      </CardContent>
+    </Card>
+
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center text-xl"><Library className="mr-3 h-6 w-6 text-blue-500" />주제별 키워드 클러스터</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {strategyResult.topicClusters.map((cluster) => (
+          <div key={cluster.mainTopic} className="p-4 border rounded-lg">
+            <h3 className="font-semibold mb-2">{cluster.mainTopic}</h3>
+            <div className="flex flex-wrap gap-2">
+              {cluster.subTopics.map((subTopic) => (<Badge key={subTopic} variant="outline">{subTopic}</Badge>))}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+    
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center text-xl"><Users className="mr-3 h-6 w-6 text-purple-500" />타겟 독자 및 추천 글감</CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {strategyResult.personas.map((persona) => (
+          <div key={persona.name} className="p-4 border rounded-lg space-y-3">
+            <h3 className="font-bold">{persona.name}</h3>
+            <p className="text-sm text-muted-foreground">{persona.description}</p>
+            <div className="space-y-2 pt-2">
+              {persona.recommendedPosts.map((post) => (
+                   <div key={post.title} className="p-3 rounded-md bg-gray-50 dark:bg-gray-800">
+                     <p className="text-sm font-medium">{post.title}</p>
+                     <p className="text-xs text-blue-600 dark:text-blue-400 mt-1"><span className="font-bold">[AI 공략 비급]</span> {post.tactic}</p>
+                   </div>
+              ))}
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  </div>
 );
 
-const Stage1_StrategyDraft = () => {
-    const { strategyResult, setStrategyResult, isLoading, setLoading, loadingMessage } = useBlogStore();
-    const [strategyType, setStrategyType] = useState<'new_idea' | 'competitor' | null>(null);
-    const [blogType, setBlogType] = useState<string | null>(null);
-    const [topic, setTopic] = useState('');
-    const [competitorContent, setCompetitorContent] = useState('');
 
-    const handleAnalysis = useCallback(async () => {
-        if (!strategyType) return;
-        setLoading(true, 'AI가 분석을 시작합니다...');
-        try {
-            let apiResult;
-            if (strategyType === 'new_idea') {
-                if (!topic || !blogType) { throw new Error("블로그 유형과 대주제를 모두 선택해주세요."); }
-                
-                setLoading(true, '1/4 단계: KOS 분석 중...');
-                const kosPrompt = `<role>15년차 SEO 전문가</role><task>'[주제: ${topic}]'의 유망 키워드 5개를 분석하고, 각 키워드의 'keyword', 'score', 'search_volume', 'content_saturation', 'ad_competition' 정보를 명확한 텍스트로 설명하라.</task>`;
-                const kosSchema = { type: "OBJECT", properties: { kos_scores: { type: "ARRAY", items: { type: "OBJECT", properties: { keyword: { type: "STRING" }, score: { type: "NUMBER" }, search_volume: { type: "STRING" }, content_saturation: { type: "STRING" }, ad_competition: { type: "STRING" } } } } }, required: ["kos_scores"] };
-                const kosResult = await callGenerativeAPI(kosPrompt, kosSchema);
+// 3.2. 메인 컴포넌트
+export default function Stage1_StrategyDraft() {
+  const { strategyResult, isLoading, error, setStrategyResult, setIsLoading, setError, resetStrategy } = useStrategyStore();
+  const [mainKeyword, setMainKeyword] = useState('');
+  const [blogType, setBlogType] = useState('전문가 블로그');
 
-                setLoading(true, '2/4 단계: 주제 클러스터 설계 중...');
-                const clusterPrompt = `<role>15년차 SEO 전문가</role><task>'[주제: ${topic}]'와 [키워드: ${kosResult.kos_scores.map((k: any) => k.keyword).join(', ')}]를 바탕으로 주제 클러스터 3개를 생성하라.</task><output_format>결과는 'clusters' 키를 포함한 JSON. 각 항목은 'name', 'keywords' 포함.</output_format>`;
-                const clusterSchema = { type: "OBJECT", properties: { clusters: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, keywords: { type: "ARRAY", items: { type: "STRING" } } } } } }, required: ["clusters"] };
-                const clusterResult = await callGenerativeAPI(clusterPrompt, clusterSchema);
+  const handleAnalysis = async () => {
+    if (!mainKeyword.trim()) {
+      toast.error("분석할 핵심 키워드를 입력해주세요.");
+      return;
+    }
+    
+    setIsLoading(true);
+    setError(null);
+    const toastId = toast.loading("AI가 키워드 전략 분석을 시작했습니다...");
 
-                setLoading(true, '3/4 단계: 필러 콘텐츠 제안 중...');
-                const pillarPrompt = `<role>15년차 SEO 전문가</role><task>[클러스터: ${clusterResult.clusters.map((c: any) => c.name).join(', ')}]를 종합하여 필러 콘텐츠 아이디어 1개를 제안하라.</task><output_format>결과는 'pillar_content' 키를 포함한 JSON. 항목은 'title', 'description' 포함.</output_format>`;
-                const pillarSchema = { type: "OBJECT", properties: { pillar_content: { type: "OBJECT", properties: { title: { type: "STRING" }, description: { type: "STRING" } } } }, required: ["pillar_content"] };
-                const pillarResult = await callGenerativeAPI(pillarPrompt, pillarSchema);
+    try {
+      const response = await fetch('/api/gemini', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mainKeyword, blogType }),
+      });
 
-                setLoading(true, '4/4 단계: 타겟 독자 분석 중...');
-                const personaPrompt = `<role>15년차 SEO 전문가</role><task>'[주제: ${topic}]'의 타겟 독자 페르소나 3개를 정의하라.</task><output_format>결과는 'personas' 키를 포함한 JSON. 각 항목은 'name', 'pain_point', 'writing_tactic', 'recommended_titles' 포함.</output_format>`;
-                const personaSchema = { type: "OBJECT", properties: { personas: { type: "ARRAY", items: { type: "OBJECT", properties: { name: { type: "STRING" }, pain_point: { type: "STRING" }, writing_tactic: { type: "STRING" }, recommended_titles: { type: "ARRAY", items: { type: "STRING" } } } } } }, required: ["personas"] };
-                const personaResult = await callGenerativeAPI(personaPrompt, personaSchema);
-                
-                apiResult = { ...kosResult, ...clusterResult, ...pillarResult, ...personaResult };
-            } else { // competitor
-                if (!competitorContent) { throw new Error("경쟁사 블로그 본문을 입력해주세요."); }
-                setLoading(true, 'AI가 경쟁사의 약점을 분석하고 있습니다...');
-                
-                const mapPromptTemplate = (chunk: string) => `<role>콘텐츠 분석가</role><task>다음 텍스트 덩어리의 핵심 주장과 주요 특징을 요약하라.</task>\n---텍스트---\n${chunk}`;
-                const reducePrompt = (summaries: string) => `<role>최고의 네이버 블로그 SEO 전략가</role><task>경쟁사 블로그 요약본 전체를 바탕으로, 공략할 '콘텐츠 갭' 3가지와 '추천 제목' 3개를 제안하라.</task><output_format>결과는 'content_gap'과 'titles' 키를 포함한 JSON 형식이어야 한다.</output_format>\n---요약본---\n${summaries}`;
-                const schema = { type: "OBJECT", properties: { content_gap: { type: "ARRAY", items: { type: "STRING" } }, titles: { type: "ARRAY", items: { type: "STRING" } } }, required: ["content_gap", "titles"] };
-                apiResult = await callChunkedAPI(competitorContent, mapPromptTemplate, reducePrompt, schema);
-            }
-            const result: StrategyResult = { type: strategyType, data: apiResult };
-            setStrategyResult(result);
-            toast.success("전략 분석이 완료되었습니다.");
-        } catch (e: any) {
-            toast.error(`전략 분석 중 오류: ${e.message}`);
-        } finally {
-            setLoading(false);
-        }
-    }, [strategyType, topic, blogType, competitorContent, setLoading, setStrategyResult]);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'API 서버에서 오류가 발생했습니다.');
+      }
 
-    const handleBack = () => {
-        if (strategyResult) { setStrategyResult(null); }
-        else if (blogType) { setBlogType(null); }
-        else if (strategyType) { setStrategyType(null); }
-    };
+      const result = await response.json();
+      setStrategyResult(result);
+      toast.success("전략 분석이 완료되었습니다!", { id: toastId });
 
-    const renderContent = () => {
-        if (isLoading) {
-            return (
-                <div className="text-center">
-                    <Loader className="mx-auto h-12 w-12 animate-spin text-blue-500" />
-                    <p className="mt-4 font-semibold text-gray-600">{loadingMessage}</p>
-                </div>
-            );
-        }
-        if (strategyResult) {
-            return (
-                <div>
-                    <Button onClick={handleBack} variant="ghost" className="mb-6"><ArrowLeft className="mr-2 h-4 w-4"/> 다시 분석하기</Button>
-                    {strategyResult.type === 'new_idea' && <NewIdeaResults result={strategyResult.data} blogType={blogType} />}
-                    {strategyResult.type === 'competitor' && <CompetitorResults result={strategyResult.data} />}
-                </div>
-            );
-        }
-        if (strategyType === 'new_idea' && !blogType) {
-            return <BlogTypeSelector onSelect={setBlogType} onBack={handleBack} />;
-        }
-        if (strategyType) {
-            return (
-                <div className="bg-white p-8 rounded-xl shadow-lg animate-fade-in">
-                    <Button onClick={handleBack} variant="ghost" className="mb-6"><ArrowLeft className="mr-2 h-4 w-4"/> 이전 단계로</Button>
-                    {strategyType === 'new_idea' ? (
-                        <Input type="text" value={topic} onChange={e => setTopic(e.target.value)} placeholder="글의 대주제는 무엇인가요? (예: AI 그림 그리기)" className="w-full p-3 border rounded-lg mb-4" />
-                    ) : (
-                        <Textarea value={competitorContent} onChange={e => setCompetitorContent(e.target.value)} placeholder="경쟁사 블로그 본문을 여기에 붙여넣어 주세요." className="w-full p-3 border rounded-lg mb-4 h-40" />
-                    )}
-                    <Button onClick={handleAnalysis} className="w-full text-lg">전략 분석</Button>
-                </div>
-            );
-        }
-        return (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <StrategyCard icon={<Sparkles />} title="새로운 아이디어로 콘텐츠 만들기" description="콘텐츠 유형을 선택하고 주제를 입력하면 AI가 글감을 제안합니다." onClick={() => setStrategyType('new_idea')} />
-                <StrategyCard icon={<Target />} title="경쟁사 분석으로 이기는 글쓰기" description="경쟁사 글을 입력하면 AI가 약점을 분석하고 더 나은 전략을 제안합니다." onClick={() => setStrategyType('competitor')} />
-            </div>
-        );
-    };
-
+    } catch (err: any) {
+      setError(err.message);
+      toast.error(`오류 발생: ${err.message}`, { id: toastId });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  if (isLoading) {
     return (
-        <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-            <div className="text-center mb-12">
-                <h2 className="text-4xl font-extrabold text-gray-900">콘텐츠 전략 수립</h2>
-                <p className="mt-4 text-lg text-gray-600">어떤 방식으로 글쓰기를 시작할까요? 목표에 맞는 전략을 선택해주세요.</p>
-            </div>
-            {renderContent()}
-        </div>
+      <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
+        <Loader2 className="h-12 w-12 animate-spin text-primary" />
+        <p className="mt-4 text-lg text-muted-foreground">AI가 전략을 수립하고 있습니다. 잠시만 기다려주세요...</p>
+      </div>
     );
-};
+  }
 
-export default Stage1_StrategyDraft;
+  if (strategyResult) {
+    return <ResultDisplay strategyResult={strategyResult} onReset={resetStrategy} />;
+  }
+
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Card className="w-full max-w-lg">
+        <CardHeader>
+          <CardTitle className="flex items-center"><Wand2 className="mr-2"/>콘텐츠 전략 수립 및 초고 작성</CardTitle>
+          <CardDescription>어떤 방식으로 글쓰기를 시작할까요? 목표에 맞는 전략을 선택해주세요.</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+           <Input 
+             placeholder="분석할 핵심 주제 또는 키워드를 입력하세요. (예: 제미나이 API)"
+             value={mainKeyword}
+             onChange={(e) => setMainKeyword(e.target.value)}
+           />
+           <Button onClick={handleAnalysis} disabled={isLoading} className="w-full">
+             AI 키워드 전략 분석
+           </Button>
+           {error && <p className="text-sm text-red-500 text-center">{error}</p>}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

@@ -1,14 +1,17 @@
 // /src/app/api/strategies/route.ts
 
 import { NextRequest, NextResponse } from 'next/server';
-// TODO: Firebase Admin SDK 및 사용자 인증 로직 import 필요
-// import { adminDb } from '@/lib/firebase-admin'; 
-// import { getAuth } from 'firebase-admin/auth';
+// [중요] 실제 프로덕션 환경에서는 아래 주석 처리된 부분을 활성화하여
+// Firebase Admin SDK와 사용자 인증 로직을 완벽하게 구현해야 한다.
+// import { adminDb } from '@/lib/firebase-admin';
+// import { getAuthFromRequest } from '@/lib/auth'; // 가정: 요청에서 사용자 인증 정보를 추출하는 헬퍼 함수
+
+// 임시 데이터베이스 역할
+const tempDb: { [key: string]: any } = {};
 
 export async function POST(req: NextRequest) {
     try {
-        // [중요] 실제 구현 시, 요청 헤더의 토큰을 통해 사용자를 인증해야 한다.
-        // const { uid } = await verifyAuthToken(req);
+        // const { uid } = await getAuthFromRequest(req);
         const uid = 'test-user-id'; // 임시 사용자 ID
 
         const { mainKeyword, kosResults, strategyDetails, id } = await req.json();
@@ -16,32 +19,56 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: '저장에 필요한 데이터가 누락되었습니다.' }, { status: 400 });
         }
 
-        const strategyData = {
-            mainKeyword,
-            kosResults,
-            strategyDetails,
-            updatedAt: new Date().toISOString(), // admin.firestore.FieldValue.serverTimestamp() 사용 권장
-        };
-
-        const strategyRef = null; // adminDb.collection('users').doc(uid).collection('strategies');
-
-        let strategyId = id;
-        if (strategyId) {
-            // 기존 전략 업데이트
-            // await strategyRef.doc(strategyId).update(strategyData);
-            console.log(`전략 업데이트: ${strategyId}`, strategyData);
-        } else {
-            // 새로운 전략 저장
-            // const newDoc = await strategyRef.add({ ...strategyData, createdAt: new Date().toISOString() });
-            // strategyId = newDoc.id;
-            strategyId = `new-strategy-${Date.now()}`; // 임시 ID 생성
-            console.log(`신규 전략 저장: ${strategyId}`, strategyData);
-        }
+        const strategyData = { mainKeyword, kosResults, strategyDetails, updatedAt: new Date().toISOString() };
+        
+        let strategyId = id || `strategy-${Date.now()}`;
+        
+        // 임시 DB에 저장
+        if (!tempDb[uid]) tempDb[uid] = {};
+        tempDb[uid][strategyId] = { ...strategyData, id: strategyId };
+        
+        // Firestore 로직 (프로덕션용)
+        // const userStrategiesRef = adminDb.collection('users').doc(uid).collection('strategies');
+        // if (id) {
+        //     await userStrategiesRef.doc(id).set(strategyData, { merge: true });
+        // } else {
+        //     const newDocRef = await userStrategiesRef.add({ ...strategyData, createdAt: new Date().toISOString() });
+        //     strategyId = newDocRef.id;
+        // }
 
         return NextResponse.json({ success: true, id: strategyId });
+    } catch (error: any) {
+        return NextResponse.json({ error: "전략 저장 중 서버 오류 발생" }, { status: 500 });
+    }
+}
+
+export async function GET(req: NextRequest) {
+    try {
+        // const { uid } = await getAuthFromRequest(req);
+        const uid = 'test-user-id'; // 임시 사용자 ID
+
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get('id');
+        
+        // 임시 DB 로직
+        const userStrategies = tempDb[uid] || {};
+
+        if (id) {
+            // 특정 전략 상세 정보 불러오기
+            const strategy = userStrategies[id];
+            if (!strategy) return NextResponse.json({ error: "전략을 찾을 수 없습니다." }, { status: 404 });
+            return NextResponse.json(strategy);
+        } else {
+            // 저장된 모든 전략 목록 불러오기
+            const strategiesList = Object.values(userStrategies).map((s: any) => ({
+                id: s.id,
+                mainKeyword: s.mainKeyword,
+                updatedAt: s.updatedAt,
+            })).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+            return NextResponse.json(strategiesList);
+        }
 
     } catch (error: any) {
-        console.error("전략 저장 API 오류:", error);
-        return NextResponse.json({ error: "전략 저장 중 서버 오류 발생" }, { status: 500 });
+        return NextResponse.json({ error: "전략 불러오기 중 서버 오류 발생" }, { status: 500 });
     }
 }

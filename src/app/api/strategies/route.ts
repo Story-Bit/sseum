@@ -6,7 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 // import { adminDb } from '@/lib/firebase-admin';
 // import { getAuthFromRequest } from '@/lib/auth'; // 가정: 요청에서 사용자 인증 정보를 추출하는 헬퍼 함수
 
-// 임시 데이터베이스 역할
+// 임시 데이터베이스 역할 (서버 재시작 시 초기화됨)
 const tempDb: { [key: string]: any } = {};
 
 export async function POST(req: NextRequest) {
@@ -23,21 +23,12 @@ export async function POST(req: NextRequest) {
         
         let strategyId = id || `strategy-${Date.now()}`;
         
-        // 임시 DB에 저장
         if (!tempDb[uid]) tempDb[uid] = {};
         tempDb[uid][strategyId] = { ...strategyData, id: strategyId };
         
-        // Firestore 로직 (프로덕션용)
-        // const userStrategiesRef = adminDb.collection('users').doc(uid).collection('strategies');
-        // if (id) {
-        //     await userStrategiesRef.doc(id).set(strategyData, { merge: true });
-        // } else {
-        //     const newDocRef = await userStrategiesRef.add({ ...strategyData, createdAt: new Date().toISOString() });
-        //     strategyId = newDocRef.id;
-        // }
-
         return NextResponse.json({ success: true, id: strategyId });
     } catch (error: any) {
+        console.error("전략 저장 API 오류:", error);
         return NextResponse.json({ error: "전략 저장 중 서버 오류 발생" }, { status: 500 });
     }
 }
@@ -50,7 +41,6 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get('id');
         
-        // 임시 DB 로직
         const userStrategies = tempDb[uid] || {};
 
         if (id) {
@@ -67,8 +57,33 @@ export async function GET(req: NextRequest) {
             })).sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
             return NextResponse.json(strategiesList);
         }
-
     } catch (error: any) {
+        console.error("전략 불러오기 API 오류:", error);
         return NextResponse.json({ error: "전략 불러오기 중 서버 오류 발생" }, { status: 500 });
+    }
+}
+
+export async function DELETE(req: NextRequest) {
+    try {
+        // const { uid } = await getAuthFromRequest(req);
+        const uid = 'test-user-id'; // 임시 사용자 ID
+
+        const { searchParams } = new URL(req.url);
+        const id = searchParams.get('id');
+
+        if (!id) {
+            return NextResponse.json({ error: "삭제할 전략의 ID가 필요합니다." }, { status: 400 });
+        }
+
+        if (tempDb[uid] && tempDb[uid][id]) {
+            delete tempDb[uid][id];
+        } else {
+            return NextResponse.json({ error: "삭제할 전략을 찾을 수 없습니다." }, { status: 404 });
+        }
+
+        return NextResponse.json({ success: true, id: id });
+    } catch (error: any) {
+        console.error("전략 삭제 API 오류:", error);
+        return NextResponse.json({ error: "전략 삭제 중 서버 오류 발생" }, { status: 500 });
     }
 }

@@ -50,7 +50,6 @@ export default function Stage1_StrategyDraft() {
   const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
 
   useEffect(() => {
-    // 컴포넌트 마운트 시 저장된 전략 목록을 자동으로 불러온다.
     const fetchSavedStrategies = async () => {
       try {
         const res = await fetch('/api/strategies');
@@ -63,12 +62,78 @@ export default function Stage1_StrategyDraft() {
     };
     fetchSavedStrategies();
   }, [setSavedStrategies]);
-  
-  // API 호출 로직들
-  const handleInitialAnalysis = async () => { /* ... 이전과 동일 ... */ };
-  const handleKeywordSelect = async (keyword: string) => { /* ... 이전과 동일 ... */ };
-  const handleGeneratePost = async (task: string, payload: object) => { /* ... 이전과 동일 ... */ };
-  const handleSaveStrategy = async () => { /* ... 이전과 동일 ... */ };
+
+  // [복구] 누락되었던 핵심 기능 함수들
+  const handleInitialAnalysis = async () => {
+    if (!mainKeywordInput.trim()) return toast.error("분석할 키워드를 입력하십시오.");
+    
+    setLoading('main', true);
+    const toastId = toast.loading("핵심 기회 키워드를 분석 중입니다...");
+
+    try {
+        const res = await fetch('/api/gemini', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ task: 'analyzeKeywords', payload: { mainKeyword: mainKeywordInput, blogType: '전문가 블로그' } }) 
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const data = await res.json();
+        
+        const initialStrategyData = {
+            mainKeyword: mainKeywordInput,
+            kosResults: data.kosResults,
+            strategyDetails: null, // 상세 정보는 아직 없음
+        }
+        setCurrentStrategy(initialStrategyData as FullStrategyData);
+
+        if (data.kosResults?.length > 0) {
+            await handleKeywordSelect(data.kosResults[0].keyword, initialStrategyData as FullStrategyData);
+        }
+        toast.success("핵심 기회 분석 완료!", { id: toastId });
+    } catch (err: any) { 
+        toast.error(`오류: ${err.message}`, { id: toastId });
+        reset(); 
+    } finally { 
+        setLoading('main', false); 
+    }
+  };
+
+  const handleKeywordSelect = async (keyword: string, currentData: FullStrategyData) => {
+    setSelectedKeyword(keyword);
+    setLoading('detail', true);
+    try {
+        const res = await fetch('/api/gemini', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: keyword } }) 
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const details = await res.json();
+        setCurrentStrategy({ ...currentData, strategyDetails: details });
+    } catch (err: any) { 
+        toast.error(`상세 전략 로딩 오류: ${err.message}`); 
+    } finally { 
+        setLoading('detail', false); 
+    }
+  };
+
+  const handleSaveStrategy = async () => {
+    if (!currentStrategy) return toast.error("저장할 분석 데이터가 없습니다.");
+    const toastId = toast.loading("현재 전략을 저장 중입니다...");
+    try {
+        const res = await fetch('/api/strategies', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(currentStrategy)
+        });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const { id } = await res.json();
+        setCurrentStrategy({ ...currentStrategy, id });
+        toast.success("전략이 성공적으로 저장되었습니다!", { id: toastId });
+    } catch (err: any) {
+        toast.error(`전략 저장 오류: ${err.message}`, { id: toastId });
+    }
+  };
 
   const handleLoadStrategy = async (strategyId: string) => {
     setLoading('main', true);
@@ -86,24 +151,21 @@ export default function Stage1_StrategyDraft() {
         setLoading('main', false);
     }
   };
-
-
-  if (isLoading) return <div className="flex flex-col items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin" /><p className="mt-4">전략 분석 중...</p></div>;
   
+  // 결과 표시 UI
   if (currentStrategy) {
-    // 결과 표시 UI (개선된 버전)
     return (
         <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 md:p-8 space-y-12">
             <div className="flex justify-between items-center">
                 <Button variant="ghost" onClick={reset}><ArrowLeft className="mr-2 h-4 w-4" />새로운 전략 분석</Button>
                 <Button onClick={handleSaveStrategy}><Save className="mr-2 h-4 w-4" />{currentStrategy.id ? '전략 업데이트' : '이 전략 저장'}</Button>
             </div>
-            {/* KOS, 클러스터, 페르소나 섹션... (UI/UX 개선 적용) */}
+            {/* KOS, 클러스터, 페르소나 섹션 렌더링... */}
         </div>
     );
   }
 
-  // 기본 입력 UI (불러오기 기능 추가)
+  // 기본 입력 UI
   return (
     <div className="flex items-center justify-center h-full">
       <div className="w-full max-w-lg space-y-8">
@@ -114,11 +176,8 @@ export default function Stage1_StrategyDraft() {
                 <Button onClick={handleInitialAnalysis} disabled={isLoading} className="w-full">AI 키워드 전략 분석</Button>
             </CardContent>
         </Card>
-        
         <Card>
-            <CardHeader>
-                <CardTitle className="flex items-center"><FolderClock className="mr-2"/>기억의 회랑: 저장된 전략</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center"><FolderClock className="mr-2"/>기억의 회랑: 저장된 전략</CardTitle></CardHeader>
             <CardContent>
                 {savedStrategies.length > 0 ? (
                     <ul className="space-y-2">

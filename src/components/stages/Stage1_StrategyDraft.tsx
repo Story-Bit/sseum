@@ -10,12 +10,36 @@ import { Button } from '@/components/ui/button';
 import { Loader2, Wand2 } from 'lucide-react';
 import { toast } from "sonner";
 
-// 새로 제련된 StrategyForge 부품과 그것이 사용하는 핵심 타입을 import 한다.
-import StrategyForge, { StrategyResult } from './StrategyForge';
+// [수정] 새로운 '통합 전략 보고서' 엔진을 import 한다.
+import StrategyReport from './StrategyReport';
 
-// =================================================================================
+// 타입 정의: 이 파일과 자식 컴포넌트가 함께 사용하므로 여기에 두는 것이 효율적이다.
+export interface KOSResult {
+  keyword: string;
+  kosScore: number;
+  explanation: string;
+}
+export interface TopicCluster {
+  mainTopic: string;
+  subTopics: string[];
+}
+export interface RecommendedPost {
+  title: string;
+  tactic: string;
+}
+export interface Persona {
+  name: string;
+  description: string;
+  recommendedPosts: RecommendedPost[];
+}
+export interface StrategyResult {
+  kosResults: KOSResult[];
+  pillarContent: string;
+  topicClusters: TopicCluster[];
+  personas: Persona[];
+}
+
 // 중앙 상태 관리소 (Zustand)
-// =================================================================================
 interface StrategyState {
   strategyResult: StrategyResult | null;
   isLoading: boolean;
@@ -26,7 +50,7 @@ interface StrategyState {
   resetStrategy: () => void;
 }
 
-const useStrategyStore = create<StrategyState>((set) => ({
+export const useStrategyStore = create<StrategyState>((set) => ({
   strategyResult: null,
   isLoading: false,
   error: null,
@@ -37,11 +61,9 @@ const useStrategyStore = create<StrategyState>((set) => ({
 }));
 
 
-// =================================================================================
-// 메인 제어실: Stage1_StrategyDraft
-// =================================================================================
+// 메인 제어실
 export default function Stage1_StrategyDraft() {
-  const { strategyResult, isLoading, error, setStrategyResult, setIsLoading, setError, resetStrategy } = useStrategyStore();
+  const { strategyResult, isLoading, error, setStrategyResult, setIsLoading, setError } = useStrategyStore();
   const [mainKeyword, setMainKeyword] = useState('');
   const [blogType, setBlogType] = useState('전문가 블로그');
 
@@ -89,9 +111,9 @@ export default function Stage1_StrategyDraft() {
     );
   }
 
-  // 결과가 있으면 '전략 제련소(StrategyForge)' 엔진을 렌더링
+  // [수정] 결과가 있으면 새로운 'StrategyReport' 엔진을 렌더링
   if (strategyResult) {
-    return <StrategyForge strategyResult={strategyResult} />;
+    return <StrategyReport />;
   }
 
   // 기본 상태에서는 '입력 양식'을 렌더링

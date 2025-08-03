@@ -18,7 +18,14 @@ export interface RecommendedPost { title: string; tactic: string; }
 export interface Persona { name: string; description: string; recommendedPosts: RecommendedPost[]; }
 export interface StrategyDetails { pillarContent: string; topicClusters: TopicCluster[]; personas: Persona[]; }
 export interface SavedStrategy { id: string; mainKeyword: string; updatedAt: string; }
-export interface FullStrategyData { id: string; mainKeyword: string; kosResults: KOSResult[]; strategyDetails: StrategyDetails; }
+
+// [오류 수정] id를 선택적으로, strategyDetails를 nullable로 변경하여 타입 불일치 해결
+export interface FullStrategyData { 
+  id?: string; 
+  mainKeyword: string; 
+  kosResults: KOSResult[]; 
+  strategyDetails: StrategyDetails | null; 
+}
 
 // 중앙 상태 관리소 (Zustand)
 interface StrategyState {
@@ -63,7 +70,6 @@ export default function Stage1_StrategyDraft() {
     fetchSavedStrategies();
   }, [setSavedStrategies]);
 
-  // [복구] 누락되었던 핵심 기능 함수들
   const handleInitialAnalysis = async () => {
     if (!mainKeywordInput.trim()) return toast.error("분석할 키워드를 입력하십시오.");
     
@@ -79,15 +85,15 @@ export default function Stage1_StrategyDraft() {
         if (!res.ok) throw new Error((await res.json()).error);
         const data = await res.json();
         
-        const initialStrategyData = {
+        const initialStrategyData: FullStrategyData = {
             mainKeyword: mainKeywordInput,
             kosResults: data.kosResults,
-            strategyDetails: null, // 상세 정보는 아직 없음
+            strategyDetails: null,
         }
-        setCurrentStrategy(initialStrategyData as FullStrategyData);
+        setCurrentStrategy(initialStrategyData);
 
         if (data.kosResults?.length > 0) {
-            await handleKeywordSelect(data.kosResults[0].keyword, initialStrategyData as FullStrategyData);
+            await handleKeywordSelect(data.kosResults[0].keyword, initialStrategyData);
         }
         toast.success("핵심 기회 분석 완료!", { id: toastId });
     } catch (err: any) { 

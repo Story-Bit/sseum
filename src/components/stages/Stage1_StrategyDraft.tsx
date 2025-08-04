@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Wand2, Rocket, Library, Lightbulb, Users, Target, ArrowLeft, Save, FolderClock, FileText, Swords, Trash2 } from 'lucide-react';
+import { Loader2, Wand2, Rocket, Library, Users, Target, ArrowLeft, Save, FolderClock, FileText, Swords, Trash2 } from 'lucide-react';
 import { toast } from "sonner";
 
 // --- 타입 정의 ---
@@ -17,7 +17,7 @@ export interface KOSResult { keyword: string; kosScore: number; explanation: str
 export interface TopicCluster { mainTopic: string; subTopics: string[]; }
 export interface RecommendedPost { title: string; tactic: string; }
 export interface Persona { name: string; description: string; recommendedPosts: RecommendedPost[]; }
-export interface StrategyDetails { pillarContent: string; topicClusters: TopicCluster[]; personas: Persona[]; }
+export interface StrategyDetails { topicClusters: TopicCluster[]; personas: Persona[]; }
 export interface SavedStrategy { id: string; mainKeyword: string; updatedAt: string; }
 export interface FullStrategyData { id?: string; mainKeyword: string; kosResults: KOSResult[]; strategyDetails: StrategyDetails | null; }
 export interface CompetitorAnalysisResult { analysis: string; suggestedTitles: string[]; suggestedOutline: string; }
@@ -92,8 +92,7 @@ const KeywordStrategyResultDisplay: FC = () => {
             {currentStrategy.strategyDetails && <>
                 <section>
                     <CardTitle className="flex items-center text-2xl mb-4"><Library className="mr-3 h-7 w-7 text-blue-500" />구조의 베틀: 콘텐츠 설계도</CardTitle>
-                    <Card className="bg-green-50 dark:bg-green-900/20 p-6"><h3 className="font-semibold text-lg mb-2"><Lightbulb className="mr-2 h-5 w-5" />추천 필러 콘텐츠 전략</h3><p>{currentStrategy.strategyDetails.pillarContent}</p><Button className="mt-4" onClick={() => handleGeneratePost('generatePillarPost', { selectedKeyword, pillarContentStrategy: currentStrategy.strategyDetails?.pillarContent }, '필러 콘텐츠')}>종합 필러 콘텐츠 생성</Button></Card>
-                    <div className="space-y-4 mt-6">{currentStrategy.strategyDetails.topicClusters.map((c) => (<div key={c.mainTopic} className="p-4 border rounded-lg"><h4 className="font-medium text-lg mb-3">{c.mainTopic}</h4><div className="flex flex-wrap gap-2">{c.subTopics.map((st) => (<Button key={st} variant="outline" size="sm" onClick={() => handleGeneratePost('generateClusterPost', { mainKeyword: currentStrategy.mainKeyword, subTopic: st }, `'${st}'`)}>{st} 초고 생성</Button>))}</div></div>))}</div>
+                    <div className="space-y-4">{currentStrategy.strategyDetails.topicClusters.map((c) => (<div key={c.mainTopic} className="p-4 border rounded-lg"><h4 className="font-medium text-lg mb-3">{c.mainTopic}</h4><div className="flex flex-wrap gap-2">{c.subTopics.map((st) => (<Button key={st} variant="outline" size="sm" onClick={() => handleGeneratePost('generateClusterPost', { mainKeyword: currentStrategy.mainKeyword, subTopic: st }, `'${st}'`)}>{st} 초고 생성</Button>))}</div></div>))}</div>
                 </section>
                 <section>
                     <CardTitle className="flex items-center text-2xl mb-4"><Users className="mr-3 h-7 w-7 text-purple-500" />실행의 모루: 타겟 독자 공략</CardTitle>
@@ -161,12 +160,25 @@ export default function Stage1_StrategyDraft() {
     finally { setLoading(false); }
   };
   
-  const handleCompetitorAnalysis = async () => { /* ... 이전과 동일 ... */ };
+  const handleCompetitorAnalysis = async () => {
+    if (!competitorContent.trim()) return toast.error("분석할 경쟁사의 글을 입력하십시오.");
+    setLoading(true);
+    reset();
+    const toastId = toast.loading("경쟁사 콘텐츠를 분석 중입니다...");
+    try {
+        const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'analyzeCompetitor', payload: { competitorContent } }) });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const data = await res.json();
+        setCompetitorResult(data);
+        toast.success("경쟁사 분석 완료!", { id: toastId });
+    } catch (err: any) { toast.error(`오류: ${err.message}`, { id: toastId }); } 
+    finally { setLoading(false); }
+  };
   
   const handleLoadStrategy = async (strategyId: string) => {
     setLoading(true);
     reset();
-    const toastId = toast.loading("저장된 전략을 불러오는 중...");
+    const toastId = toast.loading("저장된 전략을 불러오는 중입니다...");
     try {
         const res = await fetch(`/api/strategies?id=${strategyId}`);
         if (!res.ok) throw new Error('전략을 불러오지 못했습니다.');

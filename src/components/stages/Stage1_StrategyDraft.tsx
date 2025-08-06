@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Wand2, Rocket, Library, Users, Target, ArrowLeft, Save, FolderClock, FileText, Swords, Trash2 } from 'lucide-react';
+import { Loader2, Wand2, Rocket, Library, Users, Target, ArrowLeft, Save, FolderClock, FileText, Swords, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { toast } from "sonner";
 
 // --- 타입 정의 ---
@@ -53,6 +53,15 @@ export const useStrategyStore = create<StrategyState>((set) => ({
 const KeywordStrategyResultDisplay: FC = () => {
     const { currentStrategy, setCurrentStrategy, reset } = useStrategyStore();
     const [selectedKeyword, setSelectedKeyword] = useState<string | null>(currentStrategy?.kosResults[0]?.keyword || null);
+    const [manualKeywordInput, setManualKeywordInput] = useState('');
+    const [isReanalyzing, setIsReanalyzing] = useState(false);
+    const [isDetailLoading, setIsDetailLoading] = useState(false);
+
+    useEffect(() => {
+        if (currentStrategy?.kosResults[0]?.keyword) {
+            setSelectedKeyword(currentStrategy.kosResults[0].keyword);
+        }
+    }, [currentStrategy]);
 
     const handleGeneratePost = async (task: string, payload: object, description: string) => {
         const toastId = toast.loading(`${description} 초고를 생성 중입니다...`);
@@ -77,6 +86,47 @@ const KeywordStrategyResultDisplay: FC = () => {
         } catch (err: any) { toast.error(`전략 저장 오류: ${err.message}`, { id: toastId });}
     };
 
+    const handleKeywordSelect = async (keyword: string, strategyData: FullStrategyData) => {
+        if (!keyword.trim()) return;
+        setSelectedKeyword(keyword);
+        setIsDetailLoading(true);
+        setCurrentStrategy({ ...strategyData, strategyDetails: null });
+        try {
+            const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: keyword } }) });
+            if (!res.ok) throw new Error((await res.json()).error);
+            const details = await res.json();
+            setCurrentStrategy({ ...strategyData, strategyDetails: details });
+        } catch (err: any) { 
+            toast.error(`상세 전략 로딩 오류: ${err.message}`);
+            setCurrentStrategy(strategyData);
+        } finally {
+            setIsDetailLoading(false);
+        }
+    };
+
+    const handleReanalyzeKOS = async () => {
+        if (!currentStrategy?.mainKeyword) return;
+        setIsReanalyzing(true);
+        const toastId = toast.loading("AI가 다른 기회를 탐색 중입니다...");
+        try {
+            const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'analyzeKeywords', payload: { mainKeyword: currentStrategy.mainKeyword } }) });
+            if (!res.ok) throw new Error((await res.json()).error);
+            const data = await res.json();
+            
+            const updatedStrategy: FullStrategyData = { ...currentStrategy, kosResults: data.kosResults, strategyDetails: null };
+            setCurrentStrategy(updatedStrategy);
+
+            if (data.kosResults?.length > 0) {
+                await handleKeywordSelect(data.kosResults[0].keyword, updatedStrategy);
+            }
+            toast.success("새로운 기회 분석 완료!", { id: toastId });
+        } catch (err: any) {
+            toast.error(`오류: ${err.message}`, { id: toastId });
+        } finally {
+            setIsReanalyzing(false);
+        }
+    };
+    
     if (!currentStrategy) return null;
 
     return (
@@ -86,10 +136,24 @@ const KeywordStrategyResultDisplay: FC = () => {
                 <Button onClick={handleSaveStrategy}><Save className="mr-2 h-4 w-4" />{currentStrategy.id ? '전략 업데이트' : '이 전략 저장'}</Button>
             </div>
             <section>
-                <CardTitle className="flex items-center text-2xl mb-4"><Rocket className="mr-3 h-7 w-7 text-red-500" />기회의 신탁: 핵심 기회 분석</CardTitle>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{currentStrategy.kosResults.map((item) => <Card key={item.keyword} onClick={() => setSelectedKeyword(item.keyword)} className={`p-4 cursor-pointer transition-all ${selectedKeyword === item.keyword ? 'border-primary ring-2 ring-primary shadow-xl' : 'hover:shadow-md'}`}><div className="flex justify-between"><h3 className="font-bold text-lg">{item.keyword}</h3><Badge>{item.kosScore}점</Badge></div><p className="text-sm text-muted-foreground mt-2">{item.explanation}</p></Card>)}</div>
+                <div className="flex justify-between items-center mb-4">
+                    <CardTitle className="flex items-center text-2xl"><Rocket className="mr-3 h-7 w-7 text-red-500" />기회의 신탁: 핵심 기회 분석</CardTitle>
+                    <Button variant="outline" onClick={handleReanalyzeKOS} disabled={isReanalyzing}><RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />다른 기회 탐색</Button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{currentStrategy.kosResults.map((item) => <Card key={item.keyword} onClick={() => handleKeywordSelect(item.keyword, currentStrategy)} className={`p-4 cursor-pointer transition-all ${selectedKeyword === item.keyword ? 'border-primary ring-2 ring-primary shadow-xl' : 'hover:shadow-md'}`}><div className="flex justify-between"><h3 className="font-bold text-lg">{item.keyword}</h3><Badge>{item.kosScore}점</Badge></div><p className="text-sm text-muted-foreground mt-2">{item.explanation}</p></Card>)}</div>
+                <div className="mt-6 p-4 border rounded-lg bg-muted/20">
+                    <h4 className="flex items-center font-semibold mb-2"><Edit className="mr-2 h-4 w-4" />수동 경로 개척</h4>
+                    <p className="text-sm text-muted-foreground mb-3">AI 제안 외에 직접 분석할 키워드를 입력하여 상세 전략을 수립할 수 있습니다.</p>
+                    <div className="flex space-x-2">
+                        <Input placeholder="직접 키워드 입력..." value={manualKeywordInput} onChange={(e) => setManualKeywordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleKeywordSelect(manualKeywordInput, currentStrategy)} />
+                        <Button onClick={() => handleKeywordSelect(manualKeywordInput, currentStrategy)}>분석</Button>
+                    </div>
+                </div>
             </section>
-            {currentStrategy.strategyDetails && <>
+            {isDetailLoading ? (
+                <div className="flex flex-col items-center justify-center h-48"><Loader2 className="h-8 w-8 animate-spin" /><p className="mt-4">선택된 키워드에 맞춰 전략을 재구성 중...</p></div>
+            ) : currentStrategy.strategyDetails && (
+             <>
                 <section>
                     <CardTitle className="flex items-center text-2xl mb-4"><Library className="mr-3 h-7 w-7 text-blue-500" />구조의 베틀: 콘텐츠 설계도</CardTitle>
                     <div className="space-y-4">{currentStrategy.strategyDetails.topicClusters.map((c) => (<div key={c.mainTopic} className="p-4 border rounded-lg"><h4 className="font-medium text-lg mb-3">{c.mainTopic}</h4><div className="flex flex-wrap gap-2">{c.subTopics.map((st) => (<Button key={st} variant="outline" size="sm" onClick={() => handleGeneratePost('generateClusterPost', { mainKeyword: currentStrategy.mainKeyword, subTopic: st }, `'${st}'`)}>{st} 초고 생성</Button>))}</div></div>))}</div>
@@ -98,7 +162,8 @@ const KeywordStrategyResultDisplay: FC = () => {
                     <CardTitle className="flex items-center text-2xl mb-4"><Users className="mr-3 h-7 w-7 text-purple-500" />실행의 모루: 타겟 독자 공략</CardTitle>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{currentStrategy.strategyDetails.personas.map((p, idx) => (<Card key={p.name} className={`flex flex-col ${idx === 0 ? 'border-purple-400' : ''}`}><CardHeader className={`${idx === 0 ? 'bg-purple-50 dark:bg-purple-900/20' : ''}`}><h3 className="flex font-bold text-lg">{idx === 0 && <Target className="mr-2 h-5 w-5" />}핵심 타겟: {p.name}</h3><CardDescription>{p.description}</CardDescription></CardHeader><CardContent className="flex-grow space-y-3">{p.recommendedPosts.map((post) => (<div key={post.title} className="p-3 border rounded-md"><p className="font-medium">{post.title}</p><p className="text-sm text-blue-600 mt-1">{post.tactic}</p><Button size="sm" variant="ghost" className="w-full justify-start text-primary" onClick={() => handleGeneratePost('generatePersonaPost', { personaName: p.name, ...post }, `'${post.title}'`)}>초고 생성 →</Button></div>))}</CardContent></Card>))}</div>
                 </section>
-            </>}
+             </>
+            )}
         </div>
     );
 };
@@ -150,11 +215,12 @@ export default function Stage1_StrategyDraft() {
         const initialData: FullStrategyData = { mainKeyword: mainKeywordInput, kosResults: data.kosResults, strategyDetails: null };
         setCurrentStrategy(initialData);
 
-        const detailsRes = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: data.kosResults[0].keyword } }) });
-        if (!detailsRes.ok) throw new Error((await detailsRes.json()).error);
-        const detailsData = await detailsRes.json();
-
-        setCurrentStrategy({ ...initialData, strategyDetails: detailsData });
+        if (data.kosResults?.length > 0) {
+            const detailsRes = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: data.kosResults[0].keyword } }) });
+            if (!detailsRes.ok) throw new Error((await detailsRes.json()).error);
+            const detailsData = await detailsRes.json();
+            setCurrentStrategy({ ...initialData, strategyDetails: detailsData });
+        }
         toast.success("전략 분석이 완료되었습니다!", { id: toastId });
     } catch (err: any) { toast.error(`오류: ${err.message}`, { id: toastId }); reset(); } 
     finally { setLoading(false); }
@@ -199,7 +265,7 @@ export default function Stage1_StrategyDraft() {
     } catch (err: any) { toast.error(`오류: ${err.message}`, { id: toastId }); }
   };
 
-  if (isLoading) return <div className="flex flex-col items-center justify-center h-full"><Loader2 className="h-12 w-12 animate-spin" /><p className="mt-4">분석 중...</p></div>;
+  if (isLoading) return <div className="flex flex-col items-center justify-center h-full min-h-[400px]"><Loader2 className="h-12 w-12 animate-spin text-primary" /><p className="mt-4">분석 중...</p></div>;
   if (currentStrategy) return <KeywordStrategyResultDisplay />;
   if (competitorResult) return <CompetitorResultDisplay />;
 

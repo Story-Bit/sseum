@@ -3,7 +3,6 @@
 'use client';
 
 import { useState, useEffect, FC } from 'react';
-import { create } from 'zustand';
 import { AnimatePresence, motion } from 'framer-motion';
 import { JourneyProgressBar } from '@/components/ui/JourneyProgressBar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,40 +12,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Loader2, FileText, Swords, ArrowLeft, Rocket, Library, Users, Target, Save, FolderClock, Trash2, RefreshCw, Edit } from 'lucide-react';
 import { toast } from "sonner";
-
-// --- 타입 정의 ---
-export interface KOSResult { keyword: string; kosScore: number; explanation: string; }
-export interface TopicCluster { mainTopic: string; subTopics: string[]; }
-export interface RecommendedPost { title: string; tactic: string; }
-export interface Persona { name: string; description: string; recommendedPosts: RecommendedPost[]; }
-export interface StrategyDetails { topicClusters: TopicCluster[]; personas: Persona[]; }
-export interface SavedStrategy { id: string; mainKeyword: string; updatedAt: string; }
-export interface FullStrategyData { id?: string; mainKeyword: string; kosResults: KOSResult[]; strategyDetails: StrategyDetails | null; }
-export interface CompetitorAnalysisResult { analysis: string; suggestedTitles: string[]; suggestedOutline: string; }
-
-// --- 중앙 상태 관리소 (Zustand) ---
-interface JourneyState {
-  step: number; totalSteps: number; strategyMode: 'new' | 'competitor' | null; isLoading: boolean; mainKeyword: string;
-  savedStrategies: SavedStrategy[]; strategyResult: FullStrategyData | null; competitorResult: CompetitorAnalysisResult | null;
-  nextStep: () => void; prevStep: () => void; setStep: (step: number) => void; setStrategyMode: (mode: 'new' | 'competitor' | null) => void;
-  setLoading: (status: boolean) => void; setMainKeyword: (keyword: string) => void; setStrategyResult: (result: FullStrategyData | null) => void;
-  setCompetitorResult: (result: CompetitorAnalysisResult | null) => void; setSavedStrategies: (strategies: SavedStrategy[]) => void;
-  removeSavedStrategy: (strategyId: string) => void; reset: () => void;
-}
-
-const useJourneyStore = create<JourneyState>((set) => ({
-  step: 1, totalSteps: 3, strategyMode: null, isLoading: false, mainKeyword: '', savedStrategies: [],
-  strategyResult: null, competitorResult: null,
-  nextStep: () => set((state) => ({ step: Math.min(state.step + 1, state.totalSteps) })),
-  prevStep: () => set((state) => ({ step: Math.max(state.step - 1, 1) })),
-  setStep: (step) => set({ step }), setStrategyMode: (mode) => set({ strategyMode: mode }),
-  setLoading: (status) => set({ isLoading: status }), setMainKeyword: (keyword) => set({ mainKeyword: keyword }),
-  setStrategyResult: (result) => set({ strategyResult: result, competitorResult: null }),
-  setCompetitorResult: (result) => set({ competitorResult: result, strategyResult: null }),
-  setSavedStrategies: (strategies) => set({ savedStrategies: strategies }),
-  removeSavedStrategy: (strategyId) => set((state) => ({ savedStrategies: state.savedStrategies.filter(s => s.id !== strategyId) })),
-  reset: () => set({ step: 1, strategyMode: null, mainKeyword: '', strategyResult: null, competitorResult: null, isLoading: false }),
-}));
+import { useJourneyStore, FullStrategyData, CompetitorAnalysisResult } from './journeyStore';
 
 // --- 단계별 화면 컴포넌트 ---
 const animationProps = { initial: { x: 300, opacity: 0 }, animate: { x: 0, opacity: 1 }, exit: { x: -300, opacity: 0 }, transition: { duration: 0.3 }};
@@ -90,10 +56,7 @@ const StepEnterData: FC = () => {
             const data = await res.json();
             if(isNewMode) {
                 const initialData: FullStrategyData = { mainKeyword, kosResults: data.kosResults, strategyDetails: null };
-                const detailsRes = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: data.kosResults[0].keyword } }) });
-                if (!detailsRes.ok) throw new Error((await detailsRes.json()).error);
-                const detailsData = await detailsRes.json();
-                setStrategyResult({ ...initialData, strategyDetails: detailsData });
+                setStrategyResult(initialData);
             } else {
                 setCompetitorResult(data);
             }
@@ -114,46 +77,129 @@ const StepEnterData: FC = () => {
     );
 };
 
-const StepShowResult: FC = () => {
-    const { strategyResult, competitorResult } = useJourneyStore();
-    if (strategyResult) return <KeywordStrategyResultDisplay strategyResult={strategyResult} />;
-    if (competitorResult) return <CompetitorResultDisplay competitorResult={competitorResult} />;
-    return <motion.div key="no-result" {...animationProps} className="text-center">분석 결과를 불러오는 데 실패했습니다. 이전 단계로 돌아가 다시 시도하십시오.</motion.div>;
-};
-
-const KeywordStrategyResultDisplay: FC<{ strategyResult: FullStrategyData }> = ({ strategyResult }) => {
-    const { setStrategyResult } = useJourneyStore();
-    const [selectedKeyword, setSelectedKeyword] = useState<string | null>(strategyResult.kosResults[0]?.keyword || null);
+// --- New Step 3: KOS Selection ---
+const StepShowKOS: FC = () => {
+    const { strategyResult, setStrategyResult, nextStep } = useJourneyStore();
+    const [selectedKeyword, setSelectedKeyword] = useState<string | null>(null);
     const [manualKeywordInput, setManualKeywordInput] = useState('');
     const [isReanalyzing, setIsReanalyzing] = useState(false);
     const [isDetailLoading, setIsDetailLoading] = useState(false);
-    const handleGeneratePost = async (task: string, payload: object, description: string) => { const toastId = toast.loading(`${description} 초고를 생성 중입니다...`); try { const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task, payload }) }); if (!res.ok) throw new Error((await res.json()).error); const post = await res.json(); console.log("생성된 초고:", post); toast.success("초고 생성이 완료되었습니다!", { id: toastId }); } catch (err: any) { toast.error(`초고 생성 오류: ${err.message}`, { id: toastId }); }};
-    const handleSaveStrategy = async () => { const toastId = toast.loading("전략을 저장하는 중..."); try { const res = await fetch('/api/strategies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(strategyResult) }); if (!res.ok) throw new Error((await res.json()).error); const { id } = await res.json(); setStrategyResult({ ...strategyResult, id }); toast.success("전략이 성공적으로 저장/업데이트되었습니다!", { id: toastId }); } catch (err: any) { toast.error(`전략 저장 오류: ${err.message}`, { id: toastId }); }};
-    const handleKeywordSelect = async (keyword: string) => { if (!keyword.trim()) return; setSelectedKeyword(keyword); setIsDetailLoading(true); setStrategyResult({ ...strategyResult, strategyDetails: null }); try { const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: keyword } }) }); if (!res.ok) throw new Error((await res.json()).error); const details = await res.json(); setStrategyResult({ ...strategyResult, strategyDetails: details }); } catch (err: any) { toast.error(`상세 전략 로딩 오류: ${err.message}`); setStrategyResult(strategyResult); } finally { setIsDetailLoading(false); }};
-    const handleReanalyzeKOS = async () => { setIsReanalyzing(true); const toastId = toast.loading("AI가 다른 기회를 탐색 중입니다..."); try { const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'analyzeKeywords', payload: { mainKeyword: strategyResult.mainKeyword } }) }); if (!res.ok) throw new Error((await res.json()).error); const data = await res.json(); const updatedStrategy: FullStrategyData = { ...strategyResult, kosResults: data.kosResults, strategyDetails: null }; setStrategyResult(updatedStrategy); if (data.kosResults?.length > 0) { await handleKeywordSelect(data.kosResults[0].keyword); } toast.success("새로운 기회 분석 완료!", { id: toastId }); } catch (err: any) { toast.error(`오류: ${err.message}`, { id: toastId }); } finally { setIsReanalyzing(false); }};
+
+    if (!strategyResult) return <motion.div className="text-center">전략 결과를 불러오는 중...</motion.div>;
+
+    const handleKeywordSelect = async (keyword: string) => {
+        if (!keyword.trim() || isDetailLoading) return;
+        setSelectedKeyword(keyword);
+        setIsDetailLoading(true);
+        const toastId = toast.loading(`'${keyword}'에 대한 상세 전략을 생성 중입니다...`);
+        try {
+            const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: keyword } }) });
+            if (!res.ok) throw new Error((await res.json()).error);
+            const details = await res.json();
+            setStrategyResult({ ...strategyResult, strategyDetails: details });
+            toast.success("상세 전략 생성 완료!", { id: toastId });
+            nextStep();
+        } catch (err: any) {
+            toast.error(`상세 전략 로딩 오류: ${err.message}`, { id: toastId });
+        } finally {
+            setIsDetailLoading(false);
+        }
+    };
+
+    const handleReanalyzeKOS = async () => {
+        setIsReanalyzing(true);
+        const toastId = toast.loading("AI가 다른 기회를 탐색 중입니다...");
+        try {
+            const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'analyzeKeywords', payload: { mainKeyword: strategyResult.mainKeyword } }) });
+            if (!res.ok) throw new Error((await res.json()).error);
+            const data = await res.json();
+            setStrategyResult({ ...strategyResult, kosResults: data.kosResults, strategyDetails: null });
+            toast.success("새로운 기회 분석 완료!", { id: toastId });
+        } catch (err: any) {
+            toast.error(`오류: ${err.message}`, { id: toastId });
+        } finally {
+            setIsReanalyzing(false);
+        }
+    };
+
     return (
-        <motion.div key="keywordResult" {...animationProps} className="w-full max-w-5xl h-full flex flex-col">
+        <motion.div key="step3_kos" {...animationProps} className="w-full max-w-5xl h-full flex flex-col">
             <div className="flex justify-between items-center mb-8 flex-shrink-0">
-                <h1 className="text-3xl font-bold text-harmony-indigo">AI의 분석 결과예요. 이제 지휘할 시간입니다!</h1>
+                <h1 className="text-3xl font-bold text-harmony-indigo">기회의 신탁: 어떤 가능성을 탐색할까요?</h1>
+                <Button variant="outline" onClick={handleReanalyzeKOS} disabled={isReanalyzing || isDetailLoading}>
+                    <RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />
+                    다른 기회 탐색
+                </Button>
+            </div>
+             <div className="bg-white/80 border border-interaction-gray-200 rounded-lg p-6 flex-grow overflow-y-auto">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {strategyResult.kosResults.map((item) => (
+                        <Card key={item.keyword} onClick={() => handleKeywordSelect(item.keyword)} className={`p-4 cursor-pointer transition-all ${selectedKeyword === item.keyword ? 'border-primary ring-2 ring-primary shadow-xl' : 'hover:shadow-md'}`}>
+                            <div className="flex justify-between">
+                                <h3 className="font-bold text-lg">{item.keyword}</h3>
+                                <Badge>{item.kosScore}점</Badge>
+                            </div>
+                            <p className="text-sm text-muted-foreground mt-2">{item.explanation}</p>
+                            {isDetailLoading && selectedKeyword === item.keyword && <div className="absolute inset-0 bg-white/50 flex items-center justify-center"><Loader2 className="h-6 w-6 animate-spin"/></div>}
+                        </Card>
+                    ))}
+                </div>
+                <div className="mt-6 p-4 border rounded-lg bg-muted/20">
+                    <h4 className="flex items-center font-semibold mb-2"><Edit className="mr-2 h-4 w-4" />수동 경로 개척</h4>
+                    <div className="flex space-x-2">
+                        <Input placeholder="직접 키워드 입력..." value={manualKeywordInput} onChange={(e) => setManualKeywordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleKeywordSelect(manualKeywordInput)} />
+                        <Button onClick={() => handleKeywordSelect(manualKeywordInput)} disabled={isDetailLoading}>분석</Button>
+                    </div>
+                </div>
+            </div>
+        </motion.div>
+    );
+};
+
+// --- New Step 4: Strategy Details ---
+const StepShowStrategyDetails: FC = () => {
+    const { strategyResult, setStrategyResult } = useJourneyStore();
+    const [activeTab, setActiveTab] = useState<'structure' | 'execution'>('structure');
+
+    if (!strategyResult || !strategyResult.strategyDetails) return <motion.div className="text-center">전략 상세 정보를 불러오는 중...</motion.div>;
+
+    const handleGeneratePost = async (task: string, payload: object, description: string) => { const toastId = toast.loading(`${description} 초고를 생성 중입니다...`); try { const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task, payload }) }); if (!res.ok) throw new Error((await res.json()).error); const post = await res.json(); console.log("생성된 초고:", post); toast.success("초고 생성이 완료되었습니다!", { id: toastId }); } catch (err: any) { toast.error(`초고 생성 오류: ${err.message}`, { id: toastId }); }};
+
+    const handleSaveStrategy = async () => {
+        const toastId = toast.loading("전략을 저장하는 중...");
+        try {
+            const res = await fetch('/api/strategies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(strategyResult) });
+            if (!res.ok) throw new Error((await res.json()).error);
+            const { id } = await res.json();
+            setStrategyResult({ ...strategyResult, id });
+            toast.success("전략이 성공적으로 저장/업데이트되었습니다!", { id: toastId });
+        } catch (err: any) {
+            toast.error(`전략 저장 오류: ${err.message}`, { id: toastId });
+        }
+    };
+
+    return (
+        <motion.div key="step4_details" {...animationProps} className="w-full max-w-5xl h-full flex flex-col">
+            <div className="flex justify-between items-center mb-4 flex-shrink-0">
+                <h1 className="text-3xl font-bold text-harmony-indigo">전략 완성: 이제 글감을 구체화하세요.</h1>
                 <Button onClick={handleSaveStrategy}><Save className="mr-2 h-4 w-4" />{strategyResult.id ? '전략 업데이트' : '이 전략 저장'}</Button>
             </div>
-            <div className="bg-white/80 border border-interaction-gray-200 rounded-lg p-6 flex-grow overflow-y-auto">
-                <div className="space-y-12">
-                     <section>
-                        <div className="flex justify-between items-center mb-4"><CardTitle className="flex items-center text-2xl"><Rocket className="mr-3 h-7 w-7 text-red-500" />기회의 신탁</CardTitle><Button variant="outline" onClick={handleReanalyzeKOS} disabled={isReanalyzing}><RefreshCw className={`mr-2 h-4 w-4 ${isReanalyzing ? 'animate-spin' : ''}`} />다른 기회 탐색</Button></div>
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{strategyResult.kosResults.map((item) => <Card key={item.keyword} onClick={() => handleKeywordSelect(item.keyword)} className={`p-4 cursor-pointer transition-all ${selectedKeyword === item.keyword ? 'border-primary ring-2 ring-primary shadow-xl' : 'hover:shadow-md'}`}><div className="flex justify-between"><h3 className="font-bold text-lg">{item.keyword}</h3><Badge>{item.kosScore}점</Badge></div><p className="text-sm text-muted-foreground mt-2">{item.explanation}</p></Card>)}</div>
-                        <div className="mt-6 p-4 border rounded-lg bg-muted/20"><h4 className="flex items-center font-semibold mb-2"><Edit className="mr-2 h-4 w-4" />수동 경로 개척</h4><div className="flex space-x-2"><Input placeholder="직접 키워드 입력..." value={manualKeywordInput} onChange={(e) => setManualKeywordInput(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && handleKeywordSelect(manualKeywordInput)} /><Button onClick={() => handleKeywordSelect(manualKeywordInput)}>분석</Button></div></div>
-                    </section>
-                    {isDetailLoading ? <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div> : strategyResult.strategyDetails && <>
+            <div className="flex-grow flex flex-col bg-white/80 border border-interaction-gray-200 rounded-lg">
+                <div className="flex border-b">
+                    <button onClick={() => setActiveTab('structure')} className={`flex-1 p-4 text-lg font-semibold flex items-center justify-center ${activeTab === 'structure' ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-500'}`}><Library className="mr-2"/>구조의 베틀</button>
+                    <button onClick={() => setActiveTab('execution')} className={`flex-1 p-4 text-lg font-semibold flex items-center justify-center ${activeTab === 'execution' ? 'text-purple-600 border-b-2 border-purple-600' : 'text-gray-500'}`}><Users className="mr-2"/>실행의 모루</button>
+                </div>
+                <div className="p-6 flex-grow overflow-y-auto">
+                    {activeTab === 'structure' && (
                         <section>
-                            <CardTitle className="flex items-center text-2xl mb-4"><Library className="mr-3 h-7 w-7 text-blue-500" />구조의 베틀</CardTitle>
                             <div className="space-y-4">{strategyResult.strategyDetails.topicClusters.map(c => <div key={c.mainTopic} className="p-4 border rounded-lg"><h4 className="font-medium text-lg mb-3">{c.mainTopic}</h4><div className="flex flex-wrap gap-2">{c.subTopics.map((st) => (<Button key={st} variant="outline" size="sm" onClick={() => handleGeneratePost('generateClusterPost', { mainKeyword: strategyResult.mainKeyword, subTopic: st }, `'${st}'`)}>{st} 초고 생성</Button>))}</div></div>)}</div>
                         </section>
-                        <section>
-                            <CardTitle className="flex items-center text-2xl mb-4"><Users className="mr-3 h-7 w-7 text-purple-500" />실행의 모루</CardTitle>
+                    )}
+                    {activeTab === 'execution' && (
+                         <section>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">{strategyResult.strategyDetails.personas.map((p, idx) => (<Card key={p.name}><CardHeader><h3 className="flex font-bold text-lg">{idx === 0 && <Target className="mr-2 h-5 w-5" />}핵심 타겟: {p.name}</h3><CardDescription>{p.description}</CardDescription></CardHeader><CardContent className="flex-grow space-y-3">{p.recommendedPosts.map((post) => (<div key={post.title} className="p-3 border rounded-md"><p className="font-medium">{post.title}</p><p className="text-sm text-blue-600 mt-1">{post.tactic}</p><Button size="sm" variant="ghost" className="w-full justify-start text-primary" onClick={() => handleGeneratePost('generatePersonaPost', { personaName: p.name, ...post }, `'${post.title}'`)}>초고 생성 →</Button></div>))}</CardContent></Card>))}</div>
                         </section>
-                    </>}
+                    )}
                 </div>
             </div>
         </motion.div>
@@ -183,13 +229,19 @@ const CompetitorResultDisplay: FC<{ competitorResult: CompetitorAnalysisResult }
 
 // --- 메인 제어실 ---
 export default function Stage1_StrategyDraft() {
-  const { step, totalSteps, isLoading, prevStep, reset } = useJourneyStore();
+  const { step, totalSteps, isLoading, prevStep, reset, strategyMode, competitorResult } = useJourneyStore();
 
   const renderStep = () => {
     switch(step) {
       case 1: return <StepSelectPath />;
       case 2: return <StepEnterData />;
-      case 3: return <StepShowResult />;
+      case 3:
+        if (strategyMode === 'competitor') {
+            return competitorResult ? <CompetitorResultDisplay competitorResult={competitorResult} /> : <div className="text-center">경쟁사 분석 결과를 불러오는 중...</div>;
+        }
+        return <StepShowKOS />;
+      case 4:
+        return <StepShowStrategyDetails />;
       default: return <StepSelectPath />;
     }
   }

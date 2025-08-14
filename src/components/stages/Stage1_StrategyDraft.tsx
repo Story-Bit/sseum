@@ -56,7 +56,10 @@ const StepEnterData: FC = () => {
             const data = await res.json();
             if(isNewMode) {
                 const initialData: FullStrategyData = { mainKeyword, kosResults: data.kosResults, strategyDetails: null };
-                setStrategyResult(initialData);
+                const detailsRes = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task: 'generateStrategyDetails', payload: { selectedKeyword: data.kosResults[0].keyword } }) });
+                if (!detailsRes.ok) throw new Error((await detailsRes.json()).error);
+                const detailsData = await detailsRes.json();
+                setStrategyResult({ ...initialData, strategyDetails: detailsData });
             } else {
                 setCompetitorResult(data);
             }

@@ -51,7 +51,7 @@ export default function EditorLayout({
         <Sidebar isSidebarOpen={isSidebarOpen} />
         <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}>
           <Header isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
-          <main className="flex-1 overflow-y-auto">
+          <main className="flex-grow min-h-0 bg-slate-50 dark:bg-slate-900">
             {children}
           </main>
         </div>

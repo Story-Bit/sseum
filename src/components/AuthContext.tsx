@@ -1,14 +1,13 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { db, auth } from '@/firebase/config';
+import { onAuthStateChanged, User, Auth } from 'firebase/auth';
 import { Firestore } from 'firebase/firestore';
-import Toast from '@/components/ui/Toast'; // [추가]
+import Toast from '@/components/ui/Toast';
 
 interface AuthContextType {
-  db: Firestore;
-  auth: typeof auth;
+  db: Firestore | null;
+  auth: Auth | null;
   user: User | null;
   userId: string | null;
   appId: string;
@@ -26,27 +25,40 @@ export const useAuth = () => {
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [firebaseAuth, setFirebaseAuth] = useState<Auth | null>(null);
+  const [firestoreDb, setFirestoreDb] = useState<Firestore | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(null); // [추가]
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(null);
   
   const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || 'default-app-id';
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser);
-      setIsLoading(false);
+    import('@/firebase/config').then((firebaseConfig) => {
+      const { auth, db } = firebaseConfig;
+      setFirebaseAuth(auth);
+      setFirestoreDb(db);
+
+      const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+        setUser(currentUser);
+        setIsLoading(false);
+      });
+
+      return () => unsubscribe();
     });
-    return () => unsubscribe();
   }, []);
   
-  // [수정] showToast가 console.log 대신 실제 UI를 제어하도록 변경
   const showToast = (msg: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToast({ message: msg, type, id: Date.now() });
   };
 
   const value = {
-    db, auth, user, userId: user ? user.uid : null,
-    appId, isLoading, showToast,
+    db: firestoreDb,
+    auth: firebaseAuth,
+    user,
+    userId: user ? user.uid : null,
+    appId,
+    isLoading,
+    showToast,
   };
 
   return (

@@ -16,16 +16,20 @@ import { useAuth } from '@/components/AuthContext';
 import { getPostsFromFirestore } from '@/firebase/post';
 import { toast } from 'sonner';
 
+export const dynamic = 'force-dynamic';
+
 export default function EditorPage() {
-    const { user } = useAuth();
+    const { user, db } = useAuth(); // Get db from context
     const { loadPosts, setLoading, currentStage } = useBlogStore();
   
     useEffect(() => {
-      if (user) {
+      // Ensure both user and db are available
+      if (user && db) {
         const fetchPosts = async () => {
           setLoading(true, "데이터를 불러오는 중입니다...");
           try {
-            const posts = await getPostsFromFirestore(user.uid);
+            // Pass db as the first argument
+            const posts = await getPostsFromFirestore(db, user.uid);
             loadPosts(posts);
           } catch (error) {
             toast.error("데이터를 불러오는 데 실패했습니다.");
@@ -35,7 +39,7 @@ export default function EditorPage() {
         };
         fetchPosts();
       }
-    }, [user, loadPosts, setLoading]);
+    }, [user, db, loadPosts, setLoading]);
 
     const renderCurrentStage = () => {
         switch (currentStage) {

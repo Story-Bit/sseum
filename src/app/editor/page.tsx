@@ -56,9 +56,9 @@ export default function EditorPage() {
                 <AccordionContent>
                   <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 pt-2">
                     {section.items.map((item, index) => (
-                      <button key={index} className="p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-md text-left text-sm transition-colors text-slate-800 dark:text-slate-200">
+                      <Button key={index} variant="outline" className="h-auto justify-start text-left font-normal whitespace-normal">
                         {item}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </AccordionContent>

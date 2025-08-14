@@ -1,5 +1,3 @@
-// tailwind.config.ts
-
 import type { Config } from "tailwindcss"
 
 const config = {
@@ -9,7 +7,7 @@ const config = {
     './components/**/*.{ts,tsx}',
     './app/**/*.{ts,tsx}',
     './src/**/*.{ts,tsx}',
-  ],
+	],
   prefix: "",
   theme: {
     container: {
@@ -17,7 +15,7 @@ const config = {
       padding: "2rem",
       screens: {
         "2xl": "1400px",
-  },
+      },
     },
     extend: {
       colors: {
@@ -26,10 +24,9 @@ const config = {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
-        // [신규] 아폴론의 색상 팔레트
-        'inspiration-gold': '#FFC700', // 영감의 금빛
-        'harmony-indigo': '#1C2A4E',   // 조화의 남빛
-        'warm-white': '#F9F9F9',       // 따스한 백색
+        'inspiration-gold': '#FFC700',
+        'harmony-indigo': '#1C2A4E',
+        'warm-white': '#F9F9F9',
         'interaction-gray': {
           100: '#EAEAEA',
           200: '#D0D0D0',

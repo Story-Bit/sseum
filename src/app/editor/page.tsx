@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 export default function EditorPage() {
     const { user } = useAuth();
     const { loadPosts, setLoading, currentStage } = useBlogStore();
-
+  
     useEffect(() => {
       if (user) {
         const fetchPosts = async () => {

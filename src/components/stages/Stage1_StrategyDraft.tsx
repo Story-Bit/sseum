@@ -65,7 +65,7 @@ const StepEnterData: FC = () => {
             }
             toast.success("분석 완료! 멋진 결과예요.", { id: toastId });
             nextStep();
-        } catch (err: any) { toast.error(`오류 발생: ${err.message}`, { id: toastId }); reset(); }
+        } catch (err: any) { toast.error(`오류 발생: ${err.message}`, { id: toastId }); reset(); } 
         finally { setLoading(false); }
     };
     return (
@@ -167,20 +167,20 @@ const StepShowStrategyDetails: FC = () => {
     if (!strategyResult || !strategyResult.strategyDetails) return <motion.div className="text-center">전략 상세 정보를 불러오는 중...</motion.div>;
 
     const handleGeneratePost = async (task: string, payload: object, description: string) => { const toastId = toast.loading(`${description} 초고를 생성 중입니다...`); try { const res = await fetch('/api/gemini', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ task, payload }) }); if (!res.ok) throw new Error((await res.json()).error); const post = await res.json(); console.log("생성된 초고:", post); toast.success("초고 생성이 완료되었습니다!", { id: toastId }); } catch (err: any) { toast.error(`초고 생성 오류: ${err.message}`, { id: toastId }); }};
-
-    const handleSaveStrategy = async () => {
-        const toastId = toast.loading("전략을 저장하는 중...");
-        try {
-            const res = await fetch('/api/strategies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(strategyResult) });
-            if (!res.ok) throw new Error((await res.json()).error);
-            const { id } = await res.json();
-            setStrategyResult({ ...strategyResult, id });
-            toast.success("전략이 성공적으로 저장/업데이트되었습니다!", { id: toastId });
-        } catch (err: any) {
-            toast.error(`전략 저장 오류: ${err.message}`, { id: toastId });
+    
+    const handleSaveStrategy = async () => { 
+        const toastId = toast.loading("전략을 저장하는 중..."); 
+        try { 
+            const res = await fetch('/api/strategies', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(strategyResult) }); 
+            if (!res.ok) throw new Error((await res.json()).error); 
+            const { id } = await res.json(); 
+            setStrategyResult({ ...strategyResult, id }); 
+            toast.success("전략이 성공적으로 저장/업데이트되었습니다!", { id: toastId }); 
+        } catch (err: any) { 
+            toast.error(`전략 저장 오류: ${err.message}`, { id: toastId }); 
         }
     };
-
+    
     return (
         <motion.div key="step4_details" {...animationProps} className="w-full max-w-5xl h-full flex flex-col">
             <div className="flex justify-between items-center mb-4 flex-shrink-0">
@@ -238,7 +238,7 @@ export default function Stage1_StrategyDraft() {
     switch(step) {
       case 1: return <StepSelectPath />;
       case 2: return <StepEnterData />;
-      case 3:
+      case 3: 
         if (strategyMode === 'competitor') {
             return competitorResult ? <CompetitorResultDisplay competitorResult={competitorResult} /> : <div className="text-center">경쟁사 분석 결과를 불러오는 중...</div>;
         }

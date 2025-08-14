@@ -2,6 +2,8 @@
 
 import { redirect } from 'next/navigation';
 
+export const dynamic = 'force-dynamic';
+
 export default function HomePage() {
   // 사용자가 현관문('/')에 접근하면,
   // 즉시 에디터의 방('/editor')으로 보냅니다.

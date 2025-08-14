@@ -36,18 +36,19 @@ interface NewIdeaResultsProps {
 
 const NewIdeaResults: React.FC<NewIdeaResultsProps> = ({ result, blogType }) => {
   const { setActivePost, upsertPostInList, setLoading, setCurrentStage } = useBlogStore();
-  const { user } = useAuth();
+  const { user, db } = useAuth(); // Get db from context
   const [isGeneratingTitle, setIsGeneratingTitle] = useState<string | null>(null);
 
   const handleSelectAndGenerateDraft = async (title: string) => {
     if (!user) { toast.error("초고를 생성하려면 로그인이 필요합니다."); return; }
+    if (!db) { toast.error("데이터베이스 연결을 기다리는 중입니다."); return; }
     
     setIsGeneratingTitle(title);
     setLoading(true, "AI가 초고 생성을 준비합니다...");
 
     try {
         const tempPost: Partial<PostType> = { title, draft: '', strategyResult: { mainKeyword: title } };
-        const savedInitialPost = await savePostToFirestore(user.uid, tempPost);
+        const savedInitialPost = await savePostToFirestore(db, user.uid, tempPost);
         toast.info("AI 기획자가 글의 목차를 구성하고 있습니다...");
 
         const selectedBlogType = blogType || '정보성 콘텐츠';
@@ -70,7 +71,7 @@ const NewIdeaResults: React.FC<NewIdeaResultsProps> = ({ result, blogType }) => 
         const postContent = titleMatch ? fullText.substring(fullText.indexOf('\n') + 1).trim() : fullText;
 
         const finalPostData: PostType = { ...savedInitialPost, title: newTitle, draft: postContent, strategyResult: { ...savedInitialPost.strategyResult, outline } };
-        const updatedPost = await savePostToFirestore(user.uid, finalPostData);
+        const updatedPost = await savePostToFirestore(db, user.uid, finalPostData);
         
         upsertPostInList(updatedPost);
         setActivePost(updatedPost);

@@ -3,11 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "next lint"
-  },
+  "dev": "next dev",
+  "build": "next build --no-static-pages",
+  "start": "next start",
+  "lint": "next lint"
+},
   "dependencies": {
     "@google/generative-ai": "^0.14.1",
     "@radix-ui/react-scroll-area": "^1.2.9",

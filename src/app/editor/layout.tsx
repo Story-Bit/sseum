@@ -1,6 +1,7 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
+import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import AuthGuard from '@/components/AuthGuard';
 import PasteTextModal from '@/components/modals/PasteTextModal';
@@ -15,6 +16,7 @@ export default function EditorLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const { modals, closeModal } = useModalStore();
   const { setActivePost, setCurrentStage } = useBlogStore();
 
@@ -45,11 +47,14 @@ export default function EditorLayout({
         onClose={() => closeModal('about')}
       />
       
-      <div className="flex h-screen">
-        <Sidebar isSidebarOpen={true} />
-        <main className="flex-grow min-h-0 ml-72 bg-slate-50 dark:bg-slate-900">
+      <div className="flex h-screen bg-gray-50 dark:bg-black">
+        <Sidebar isSidebarOpen={isSidebarOpen} />
+        <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-72' : 'ml-0'}`}>
+          <Header isSidebarOpen={isSidebarOpen} setIsSidebarOpen={setIsSidebarOpen} />
+          <main className="flex-1 overflow-y-auto">
             {children}
-        </main>
+          </main>
+        </div>
       </div>
     </AuthGuard>
   );

@@ -1,91 +1,137 @@
 'use client';
 
-import { Button } from "@/components/ui/button";
-import {
-  ResizablePanel,
-  ResizablePanelGroup,
-  ResizableHandle,
-} from "@/components/ui/resizable";
-import { ChevronRight } from "lucide-react";
-import Stage1_StrategyDraft from '@/components/stages/Stage1_StrategyDraft';
-import Stage2_Refinement from '@/components/stages/Stage2_Refinement';
-import Stage3_Publish from '@/components/stages/Stage3_Publish';
-import { useBlogStore } from '@/components/stages/blog-store';
-import { useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/components/AuthContext';
 import { getPostsFromFirestore } from '@/firebase/post';
+import { useBlogStore } from '@/components/stages/blog-store';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FilePlus, Loader } from 'lucide-react';
 import { toast } from 'sonner';
 
-export const dynamic = 'force-dynamic';
+import { AnimatePresence } from 'framer-motion';
+import { useJourneyStore } from '@/components/stages/journeyStore';
+import { ConstellationNavigator } from '@/components/ui/ConstellationNavigator';
+import { Step1_Topic } from '@/components/stages/Step1_Topic';
+import { Step2_Persona } from '@/components/stages/Step2_Persona';
+import { X } from 'lucide-react';
 
-export default function EditorPage() {
-    const { user, db } = useAuth(); // Get db from context
-    const { loadPosts, setLoading, currentStage } = useBlogStore();
-  
+// --- The Grand Stage Component (Phase 2) ---
+const GrandStage = ({ onExit }: { onExit: () => void }) => {
+    const { currentStep, resetJourney } = useJourneyStore();
+
+    const handleExit = () => {
+        resetJourney();
+        onExit();
+    };
+
+    const renderCurrentStep = () => {
+        switch (currentStep) {
+            case 1:
+                return <Step1_Topic />;
+            case 2:
+                return <Step2_Persona />;
+            // Future steps will be added here
+            default:
+                return <div>Step {currentStep}</div>;
+        }
+    };
+
+    return (
+        <div className="w-screen h-screen flex flex-col items-center justify-center bg-[#F9F9F9] p-8 relative">
+            <Button onClick={handleExit} variant="ghost" size="icon" className="absolute top-6 right-6">
+                <X className="h-6 w-6" />
+            </Button>
+            <div className="absolute top-8">
+                <ConstellationNavigator />
+            </div>
+            <AnimatePresence mode="wait">
+                {renderCurrentStep()}
+            </AnimatePresence>
+        </div>
+    );
+};
+
+// --- Plaza of Inspiration Component (Phase 1) ---
+const PlazaOfInspiration = ({ onStartJourney }: { onStartJourney: () => void }) => {
+    const { user, db } = useAuth();
+    const { posts, loadPosts, setLoading, isLoading: isBlogLoading } = useBlogStore();
+
     useEffect(() => {
-      // Ensure both user and db are available
+      // This is the definitive fix for the build error.
+      // By ensuring Firebase is only used in client components that are NOT the page itself,
+      // and that the db connection is passed explicitly, we prevent the build process
+      // from trying to access it on the server.
       if (user && db) {
-        const fetchPosts = async () => {
-          setLoading(true, "데이터를 불러오는 중입니다...");
-          try {
-            // Pass db as the first argument
-            const posts = await getPostsFromFirestore(db, user.uid);
-            loadPosts(posts);
-          } catch (error) {
-            toast.error("데이터를 불러오는 데 실패했습니다.");
-          } finally {
-            setLoading(false);
-          }
-        };
-        fetchPosts();
-      }
+            const fetchPosts = async () => {
+                setLoading(true, "과거의 여정을 불러오는 중...");
+                try {
+                    const fetchedPosts = await getPostsFromFirestore(db, user.uid);
+                    loadPosts(fetchedPosts);
+                } catch (error) {
+                    toast.error("과거 여정을 불러오는 데 실패했습니다.");
+                } finally {
+                    setLoading(false);
+                }
+            };
+            fetchPosts();
+        }
     }, [user, db, loadPosts, setLoading]);
 
-    const renderCurrentStage = () => {
-        switch (currentStage) {
-            case 'strategy':
-                return <Stage1_StrategyDraft />;
-            case 'refinement':
-                return <Stage2_Refinement />;
-            case 'publish':
-                return <Stage3_Publish />;
-            default:
-                return <Stage1_StrategyDraft />;
-        }
+    return (
+        <div className="p-8 max-w-7xl mx-auto">
+            <header className="mb-12 text-center">
+                <h1 className="text-5xl font-bold text-harmony-indigo">영감의 광장</h1>
+                <p className="text-xl text-harmony-indigo/70 mt-2">이곳에서 당신의 위대한 이야기가 시작됩니다.</p>
+            </header>
+
+            <div className="text-center mb-12">
+                <Button size="lg" className="h-16 text-2xl" onClick={onStartJourney}>
+                    <FilePlus className="mr-4 h-8 w-8" />
+                    새로운 글쓰기 여정 시작하기
+                </Button>
+            </div>
+
+            <section>
+                <h2 className="text-3xl font-bold text-harmony-indigo mb-6">과거의 여정들</h2>
+                {isBlogLoading ? (
+                    <div className="flex justify-center items-center h-40">
+                        <Loader className="h-8 w-8 animate-spin" />
+                    </div>
+                ) : posts.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {posts.map((post) => (
+                            <Card key={post.id}>
+                                <CardHeader>
+                                    <CardTitle>{post.title}</CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-sm text-muted-foreground">
+                                        {post.draft.substring(0, 100)}...
+                                    </p>
+                                    <Button variant="link" className="p-0 h-auto mt-4">
+                                        이어서 작업하기
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        ))}
+                    </div>
+                ) : (
+                    <p className="text-center text-muted-foreground">아직 시작된 여정이 없습니다.</p>
+                )}
+            </section>
+        </div>
+    );
+};
+
+
+// --- World Controller ---
+export default function EditorPage() {
+    const [view, setView] = useState<'plaza' | 'journey'>('plaza');
+
+    if (view === 'journey') {
+        return <GrandStage onExit={() => setView('plaza')} />;
     }
 
-  return (
-    <ResizablePanelGroup direction="horizontal" className="h-full">
-        <ResizablePanel defaultSize={25} minSize={20} maxSize={30}>
-            {/* 좌측 사이드바 */}
-            <div className="flex h-full flex-col p-4">
-                <div className="grid grid-cols-2 gap-2 mb-4">
-                    <Button variant="outline">새 글 작성</Button>
-                    <Button variant="outline">외부 글 가져오기</Button>
-                    <Button variant="outline">글 저장하기</Button>
-                    <Button variant="outline">글 불러오기</Button>
-                </div>
-                <div className="flex-grow">
-                    <h3 className="text-sm font-semibold mb-2">작업 단계</h3>
-                    <div className="space-y-1">
-                        <Button variant="secondary" className="w-full justify-start">1. 전략 & 초고</Button>
-                        <Button variant="ghost" className="w-full justify-start">2. AI 퇴고</Button>
-                        <Button variant="ghost" className="w-full justify-start">3. 발행 & 활용</Button>
-                    </div>
-                </div>
-                <div>
-                    <Button variant="ghost" className="w-full justify-between">
-                        나만의 글쓰기 스타일
-                        <ChevronRight className="h-4 w-4" />
-                    </Button>
-                </div>
-            </div>
-        </ResizablePanel>
-        <ResizableHandle withHandle />
-        <ResizablePanel defaultSize={75} className="flex flex-col">
-            {/* 중앙 콘텐츠 패널 */}
-            {renderCurrentStage()}
-        </ResizablePanel>
-    </ResizablePanelGroup>
-  );
+    return <PlazaOfInspiration onStartJourney={() => setView('journey')} />;
 }

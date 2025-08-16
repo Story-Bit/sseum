@@ -10,7 +10,6 @@ interface AuthContextType {
   auth: Auth | null;
   user: User | null;
   userId: string | null;
-  appId: string;
   isLoading: boolean;
   showToast: (msg: string, type?: 'success' | 'error' | 'info') => void;
 }
@@ -30,8 +29,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(null);
   
-  const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || 'default-app-id';
-
   useEffect(() => {
     import('@/firebase/config').then((firebaseConfig) => {
       const { auth, db } = firebaseConfig;
@@ -56,7 +53,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     auth: firebaseAuth,
     user,
     userId: user ? user.uid : null,
-    appId,
     isLoading,
     showToast,
   };

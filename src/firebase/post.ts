@@ -9,14 +9,12 @@ import {
   getDocs,
   query,
   orderBy,
-  Firestore, // Import Firestore type
+  Firestore,
 } from 'firebase/firestore';
-// import { db } from './config'; // REMOVED: This is the cause of the build error.
 import { PostType } from '../components/stages/blog-store';
 
-// Firestore에 포스트를 저장하거나 업데이트하는 함수
 export const savePostToFirestore = async (
-  db: Firestore, // db instance is now passed as an argument
+  db: Firestore,
   userId: string,
   postData: Partial<PostType>
 ): Promise<PostType> => {
@@ -44,9 +42,8 @@ export const savePostToFirestore = async (
   }
 };
 
-// Firestore에서 모든 포스트를 불러오는 함수
 export const getPostsFromFirestore = async (
-  db: Firestore, // db instance is now passed as an argument
+  db: Firestore,
   userId: string
 ): Promise<PostType[]> => {
   if (!userId) return [];

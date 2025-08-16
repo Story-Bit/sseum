@@ -95,7 +95,7 @@ interface SidebarProps {
 }
 
 export default function Sidebar({ isSidebarOpen }: SidebarProps) {
-  const { user, db } = useAuth(); // Get db from context
+  const { user, db } = useAuth();
   const { posts, activePost, setActivePost, upsertPostInList, currentStage, setCurrentStage } = useBlogStore();
   const { openModal } = useModalStore();
 

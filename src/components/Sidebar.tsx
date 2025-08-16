@@ -106,8 +106,7 @@ export default function Sidebar({ isSidebarOpen }: SidebarProps) {
   };
 
   const handleSave = async () => {
-    if (!user || !activePost) { toast.error(!user ? "저장을 위해 로그인이 필요합니다." : "저장할 글이 없습니다."); return; }
-    if (!db) { toast.error("데이터베이스 연결을 기다리는 중입니다."); return; }
+    if (!user || !activePost || !db) { toast.error("저장할 준비가 되지 않았습니다. 로그인 및 데이터베이스 연결을 확인하세요."); return; }
     try {
       const savedPost = await savePostToFirestore(db, user.uid, activePost);
       upsertPostInList(savedPost);

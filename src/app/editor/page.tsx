@@ -5,18 +5,16 @@ import { useAuth } from '@/components/AuthContext';
 import { getPostsFromFirestore } from '@/firebase/post';
 import { useBlogStore } from '@/components/stages/blog-store';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FilePlus, Loader } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { FilePlus, Loader, X } from 'lucide-react';
 import { toast } from 'sonner';
-
 import { AnimatePresence } from 'framer-motion';
 import { useJourneyStore } from '@/components/stages/journeyStore';
 import { ConstellationNavigator } from '@/components/ui/ConstellationNavigator';
 import { Step1_Topic } from '@/components/stages/Step1_Topic';
 import { Step2_StrategyAnalysis } from '@/components/stages/Step2_StrategyAnalysis';
-import { X } from 'lucide-react';
 
-// --- The Grand Stage Component (Phase 2) ---
+// --- The Grand Stage Component (Rendered for the 'journey' view) ---
 const GrandStage = ({ onExit }: { onExit: () => void }) => {
     const { currentStep, resetJourney } = useJourneyStore();
 
@@ -31,7 +29,6 @@ const GrandStage = ({ onExit }: { onExit: () => void }) => {
                 return <Step1_Topic />;
             case 2:
                 return <Step2_StrategyAnalysis />;
-            // Future steps will be added here
             default:
                 return <div>Step {currentStep}</div>;
         }
@@ -52,6 +49,7 @@ const GrandStage = ({ onExit }: { onExit: () => void }) => {
     );
 };
 
+// --- The Perfected Plaza of Inspiration Component ---
 const PlazaOfInspiration = ({ onStartJourney }: { onStartJourney: () => void }) => {
     const { user, db } = useAuth();
     const { posts, loadPosts, setLoading, isLoading: isBlogLoading } = useBlogStore();
@@ -74,54 +72,59 @@ const PlazaOfInspiration = ({ onStartJourney }: { onStartJourney: () => void }) 
     }, [user, db, loadPosts, setLoading]);
 
     return (
-        <div className="p-8 max-w-7xl mx-auto h-full overflow-y-auto">
-            <header className="mb-12">
+        // This container uses flexbox to manage its children's sizes and prevent overflow.
+        <div className="p-8 h-full flex flex-col">
+            <header className="mb-8 flex-shrink-0">
                 <h1 className="text-4xl font-bold text-harmony-indigo">영감의 광장</h1>
                 <p className="text-xl text-harmony-indigo/70 mt-2">이곳에서 당신의 위대한 이야기가 시작됩니다.</p>
             </header>
 
-            <div className="mb-12">
+            <div className="mb-8 flex-shrink-0">
                 <Button size="lg" className="h-16 text-xl" onClick={onStartJourney}>
                     <FilePlus className="mr-4 h-8 w-8" />
                     새로운 글쓰기 여정 시작하기
                 </Button>
             </div>
 
-            <section>
-                <h2 className="text-2xl font-bold text-harmony-indigo mb-6">과거의 여정들</h2>
-                {isBlogLoading ? (
-                    <div className="flex justify-center items-center h-40">
-                        <Loader className="h-8 w-8 animate-spin" />
-                    </div>
-                ) : posts.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {posts.map((post) => (
-                            <Card key={post.id}>
-                                <CardHeader>
-                                    <CardTitle>{post.title}</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <p className="text-sm text-muted-foreground">
-                                        {post.draft.substring(0, 100)}...
-                                    </p>
-                                    <Button variant="link" className="p-0 h-auto mt-4">
-                                        이어서 작업하기
-                                    </Button>
-                                </CardContent>
-                            </Card>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-12 border-2 border-dashed rounded-lg">
-                        <p className="text-muted-foreground">아직 시작된 여정이 없습니다.</p>
-                        <p className="text-sm text-muted-foreground mt-1">'새로운 글쓰기 여정'을 시작하여 첫 번째 걸작을 만들어보세요.</p>
-                    </div>
-                )}
+            <section className="flex-grow min-h-0">
+                <h2 className="text-2xl font-bold text-harmony-indigo mb-4">과거의 여정들</h2>
+                <div className="h-full overflow-y-auto"> {/* This inner div scrolls, not the whole page */}
+                    {isBlogLoading ? (
+                        <div className="flex justify-center items-center h-full">
+                            <Loader className="h-8 w-8 animate-spin" />
+                        </div>
+                    ) : posts.length > 0 ? (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                            {posts.map((post) => (
+                                <Card key={post.id} className="flex flex-col">
+                                    <CardHeader>
+                                        <CardTitle>{post.title}</CardTitle>
+                                        <CardDescription>{post.updatedAt ? new Date(post.updatedAt.seconds * 1000).toLocaleString() : '날짜 없음'}</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="flex-grow">
+                                        <p className="text-sm text-muted-foreground line-clamp-3">
+                                            {post.draft || "내용 없음"}
+                                        </p>
+                                    </CardContent>
+                                    <div className="p-6 pt-0">
+                                        <Button className="w-full">이어서 작업하기</Button>
+                                    </div>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <div className="text-center h-full flex flex-col justify-center items-center border-2 border-dashed rounded-lg">
+                            <p className="text-muted-foreground">아직 시작된 여정이 없습니다.</p>
+                            <p className="text-sm text-muted-foreground mt-1">'새로운 글쓰기 여정'을 시작하여 첫 번째 걸작을 만들어보세요.</p>
+                        </div>
+                    )}
+                </div>
             </section>
         </div>
     );
 };
 
+// --- World Controller ---
 export default function EditorPage() {
     const [view, setView] = useState<'plaza' | 'journey'>('plaza');
 

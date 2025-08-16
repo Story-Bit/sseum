@@ -16,12 +16,11 @@ export const Step2_StrategyAnalysis = () => {
     { title: "AI 챗봇 개발 튜토리얼", score: 78 },
     { title: "LangChain 연동하기", score: 92 },
   ];
-  const outline = "1. 서론\n2. 본론\n  - 소제목 1\n  - 소제목 2\n3. 결론";
+  const outline = "1. 서론: AI 에이전트의 중요성\n2. 본론 1: Gemini API 키 발급받기\n3. 본론 2: 핵심 기능 구현하기\n4. 결론: AI 에이전트의 미래";
 
   const handleSelectLevel = (level: 'beginner' | 'intermediate' | 'advanced') => {
     setStrategyAnalysis({ draftLevel: level });
-    // In a real scenario, we might do more before proceeding
-    nextStep();
+    // In a real app, we might wait for all tabs to be interacted with
   };
 
   return (
@@ -45,28 +44,31 @@ export const Step2_StrategyAnalysis = () => {
           <TabsTrigger value="draft-level"><BarChart className="mr-2 h-4 w-4"/> 단계별 초안</TabsTrigger>
           <TabsTrigger value="outline"><ListChecks className="mr-2 h-4 w-4"/> 목차 제안</TabsTrigger>
         </TabsList>
-        <TabsContent value="recommendations" className="p-4 border rounded-md mt-4">
+
+        <TabsContent value="recommendations" className="p-6 border rounded-b-md mt-0">
             <p className="text-left text-sm text-muted-foreground mb-4">AI가 분석한 관련성 및 시장성 기반 추천 소재입니다.</p>
-            <div className="space-y-2">
+            <div className="space-y-3">
                 {recommendations.map(rec => (
-                    <div key={rec.title} className="flex justify-between items-center p-3 bg-slate-100 rounded-md">
+                    <div key={rec.title} className="flex justify-between items-center p-4 bg-slate-100 rounded-lg">
                         <span className="font-semibold">{rec.title}</span>
                         <span className="text-sm font-bold text-blue-600">{rec.score}점</span>
                     </div>
                 ))}
             </div>
         </TabsContent>
-        <TabsContent value="draft-level" className="p-4 border rounded-md mt-4">
+
+        <TabsContent value="draft-level" className="p-6 border rounded-b-md mt-0">
             <p className="text-left text-sm text-muted-foreground mb-4">독자의 수준에 맞춰 AI가 생성할 초고의 깊이를 선택합니다.</p>
             <div className="grid grid-cols-3 gap-4">
-                <Button variant="outline" onClick={() => handleSelectLevel('beginner')}>초급</Button>
-                <Button variant="outline" onClick={() => handleSelectLevel('intermediate')}>중급</Button>
-                <Button variant="outline" onClick={() => handleSelectLevel('advanced')}>고급</Button>
+                <Button variant={strategyAnalysis.draftLevel === 'beginner' ? 'default' : 'outline'} onClick={() => handleSelectLevel('beginner')}>초급</Button>
+                <Button variant={strategyAnalysis.draftLevel === 'intermediate' ? 'default' : 'outline'} onClick={() => handleSelectLevel('intermediate')}>중급</Button>
+                <Button variant={strategyAnalysis.draftLevel === 'advanced' ? 'default' : 'outline'} onClick={() => handleSelectLevel('advanced')}>고급</Button>
             </div>
         </TabsContent>
-        <TabsContent value="outline" className="p-4 border rounded-md mt-4">
-            <p className="text-left text-sm text-muted-foreground mb-4">AI가 제안하는 논리적인 글의 구조입니다.</p>
-            <pre className="p-4 bg-slate-100 rounded-md text-left whitespace-pre-wrap font-sans">
+
+        <TabsContent value="outline" className="p-6 border rounded-b-md mt-0">
+            <p className="text-left text-sm text-muted-foreground mb-4">AI가 제안하는 논리적인 글의 구조입니다. 이 목차를 기반으로 초고가 생성됩니다.</p>
+            <pre className="p-4 bg-slate-100 rounded-md text-left whitespace-pre-wrap font-sans text-sm">
                 {outline}
             </pre>
         </TabsContent>
